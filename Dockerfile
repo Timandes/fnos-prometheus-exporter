@@ -9,4 +9,4 @@ RUN uv run python -c "import prometheus_client; print('prometheus_client importe
 EXPOSE 9100
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:9100/metrics || exit 1
-CMD ["sh", "-c", "uv run python main.py --host \"${FNOS_HOST:-127.0.0.1:5666}\" --user \"${FNOS_USER:-admin}\" --password \"${FNOS_PASSWORD:-admin}\" --port 9100"]
+CMD ["sh", "-c", "uv run python main.py --host \"${FNOS_HOST:-127.0.0.1:5666}\" --user \"${FNOS_USER:-admin}\" --password \"${FNOS_PASSWORD:-admin}\" --port 9100 --log-level \"${FNOS_LOG_LEVEL:-INFO}\""]

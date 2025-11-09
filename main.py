@@ -63,8 +63,11 @@ from wsgiref.simple_server import make_server
 
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+# Set up basic logging configuration
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 # Global variable to control the main loop
@@ -634,9 +637,12 @@ def main():
 
     parser.add_argument('--port', type=int, default=9100, help='Port to expose Prometheus metrics (default: 9100)')
 
+    parser.add_argument('--log-level', type=str, default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='Set the logging level (default: INFO)')
+
     args = parser.parse_args()
 
-
+    # Set logging level based on command line argument
+    logging.getLogger().setLevel(getattr(logging, args.log_level.upper()))
 
     # Register signal handlers for graceful shutdown
 

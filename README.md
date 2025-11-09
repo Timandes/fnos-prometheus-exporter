@@ -20,6 +20,7 @@ docker run -d \
   -e FNOS_HOST=127.0.0.1:5666 \
   -e FNOS_USER=your-username \
   -e FNOS_PASSWORD=your-password \
+  -e FNOS_LOG_LEVEL=INFO \
   -p 9100:9100 \
   ghcr.io/timandes/fnos-prometheus-exporter:latest
 ```
@@ -37,6 +38,7 @@ services:
       - FNOS_HOST=127.0.0.1:5666
       - FNOS_USER=your-username
       - FNOS_PASSWORD=your-password
+      - FNOS_LOG_LEVEL=INFO
     ports:
       - "9100:9100"
     restart: unless-stopped
@@ -80,6 +82,7 @@ uvx fnos-exporter --user your-username --password your-password
 - `--user`: 连接到 fnOS 系统的用户名（必填）
 - `--password`: 连接到 fnOS 系统的密码（必填）
 - `--port`: 暴露 Prometheus 指标的端口（默认值：9100）
+- `--log-level`: 设置日志级别（可选：DEBUG, INFO, WARNING, ERROR, CRITICAL，默认值：INFO）
 
 ## 开发
 
@@ -132,6 +135,7 @@ services:
       - FNOS_HOST=192.168.31.118:5666  # 替换为你的fnOS实际IP地址
       - FNOS_USER=your-username
       - FNOS_PASSWORD=your-password
+      - FNOS_LOG_LEVEL=INFO
     restart: unless-stopped
 ```
 
@@ -145,6 +149,7 @@ services:
       - FNOS_HOST=192.168.31.118:5666  # 替换为你的fnOS实际IP地址
       - FNOS_USER=your-username
       - FNOS_PASSWORD=your-password
+      - FNOS_LOG_LEVEL=INFO
     ports:
       - "9100:9100"
     restart: unless-stopped
