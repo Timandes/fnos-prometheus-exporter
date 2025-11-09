@@ -21,7 +21,31 @@ docker run -d \
   -e FNOS_USER=your-username \
   -e FNOS_PASSWORD=your-password \
   -p 9100:9100 \
-  your-docker-username/fnos-exporter:latest
+  ghcr.io/timandes/fnos-prometheus-exporter:latest
+```
+
+### Docker Compose
+
+您也可以使用 Docker Compose 来运行 fnOS Prometheus Exporter。创建一个 `docker-compose.yml` 文件：
+
+```yaml
+version: '3.8'
+services:
+  fnos-exporter:
+    image: ghcr.io/timandes/fnos-prometheus-exporter:latest
+    environment:
+      - FNOS_HOST=your-fnos-host
+      - FNOS_USER=your-username
+      - FNOS_PASSWORD=your-password
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+```
+
+然后运行以下命令启动服务：
+
+```bash
+docker-compose up -d
 ```
 
 ### uvx (通过 PyPI)
