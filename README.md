@@ -44,11 +44,11 @@ uvx fnos-exporter --host your-fnos-host --user your-username --password your-pas
 |-------------|------|-------------|
 | fnos_uptime | Gauge | fnOS 系统的正常运行时间信息（具体子指标取决于系统返回的内容） |
 
-## 命令行参数
-
-- `--host`: fnOS 系统的主机名或 IP 地址（必填）
-- `--user`: 连接到 fnOS 系统的用户名（必填）
-- `--password`: 连接到 fnOS 系统的密码（必填）
+## 命令行参数
+
+- `--host`: fnOS 系统的主机名或 IP 地址（必填）
+- `--user`: 连接到 fnOS 系统的用户名（必填）
+- `--password`: 连接到 fnOS 系统的密码（必填）
 - `--port`: 暴露 Prometheus 指标的端口（默认值：9100）
 
 ## 开发
@@ -59,15 +59,9 @@ uvx fnos-exporter --host your-fnos-host --user your-username --password your-pas
 uv run python main.py
 ```
 
-在 Linux/macOS 上使用命令行参数运行：
+使用命令行参数运行：
 
 ```bash
-FNOS_HOST=your-fnos-host FNOS_USER=your-username FNOS_PASSWORD=your-password uv run python main.py
-```
-
-在 Windows 上使用命令行参数运行：
-
-```cmd
 uv run python main.py --host your-fnos-host --user your-username --password your-password --port 9100
 ```
 
