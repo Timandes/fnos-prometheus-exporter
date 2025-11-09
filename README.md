@@ -1,19 +1,19 @@
 # fnOS Prometheus Exporter
 
-fnOS Prometheus Exporter is a Python-based exporter that exposes metrics from fnOS systems to Prometheus.
+fnOS Prometheus Exporter 是一个基于 Python 的导出器，用于将 fnOS 系统的指标暴露给 Prometheus。
 
-## Features
+## 功能特性
 
-- Exposes fnOS system metrics to Prometheus
-- Docker support for easy deployment
-- Configurable via environment variables
-- Supports installation via PyPI with uvx
+- 将 fnOS 系统指标暴露给 Prometheus
+- 支持 Docker 以便于部署
+- 可通过环境变量进行配置
+- 支持通过 PyPI 使用 uvx 安装
 
-## Usage
+## 用法
 
 ### Docker
 
-The easiest way to run the fnOS Prometheus Exporter is using the Docker image:
+运行 fnOS Prometheus Exporter 的最简单方法是使用 Docker 镜像：
 
 ```bash
 docker run -d \
@@ -24,58 +24,58 @@ docker run -d \
   your-docker-username/fnos-exporter:latest
 ```
 
-### uvx (via PyPI)
+### uvx (通过 PyPI)
 
-Alternatively, you can run the exporter directly from PyPI using uvx:
+或者，您可以使用 uvx 直接从 PyPI 运行导出器：
 
 ```bash
 uvx fnos-exporter
 ```
 
-You can still configure the connection to your fnOS system using environment variables:
+您仍然可以使用环境变量配置与 fnOS 系统的连接：
 
 ```bash
 FNOS_HOST=your-fnos-host FNOS_USER=your-username FNOS_PASSWORD=your-password uvx fnos-exporter
 ```
 
-## Metrics
+## 指标
 
-| Metric Name | Type | Description |
+| 指标名称 | 类型 | 描述 |
 |-------------|------|-------------|
-| fnos_uptime | Gauge | Uptime information from fnOS system (specific sub-metrics depend on what's returned by the system) |
+| fnos_uptime | Gauge | fnOS 系统的正常运行时间信息（具体子指标取决于系统返回的内容） |
 
-## Environment Variables
+## 环境变量
 
-- `FNOS_HOST`: The hostname or IP address of the fnOS system (default: localhost)
-- `FNOS_USER`: The username to connect to the fnOS system (default: admin)
-- `FNOS_PASSWORD`: The password to connect to the fnOS system (default: admin)
+- `FNOS_HOST`: fnOS 系统的主机名或 IP 地址（默认值：localhost）
+- `FNOS_USER`: 连接到 fnOS 系统的用户名（默认值：admin）
+- `FNOS_PASSWORD`: 连接到 fnOS 系统的密码（默认值：admin）
 
-## Development
+## 开发
 
-To run the exporter directly with uv:
+直接使用 uv 运行导出器：
 
 ```bash
 uv run python main.py
 ```
 
-To run with environment variables on Linux/macOS:
+在 Linux/macOS 上使用环境变量运行：
 
 ```bash
 FNOS_HOST=your-fnos-host FNOS_USER=your-username FNOS_PASSWORD=your-password uv run python main.py
 ```
 
-To run with environment variables on Windows:
+在 Windows 上使用环境变量运行：
 
 ```cmd
 set FNOS_HOST=your-fnos-host && set FNOS_USER=your-username && set FNOS_PASSWORD=your-password && uv run python main.py
 ```
 
-To run tests (if any):
+运行测试（如果有的话）：
 
 ```bash
 uv run pytest
 ```
 
-## License
+## 许可证
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+本项目根据 Apache 许可证 2.0 版获得许可 - 详情请参见 [LICENSE](LICENSE) 文件。
