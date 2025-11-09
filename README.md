@@ -20,7 +20,7 @@ docker run -d \
   -e FNOS_HOST=your-fnos-host \
   -e FNOS_USER=your-username \
   -e FNOS_PASSWORD=your-password \
-  -p 8000:8000 \
+  -p 9100:9100 \
   your-docker-username/fnos-exporter:latest
 ```
 
@@ -32,10 +32,10 @@ docker run -d \
 uvx fnos-exporter
 ```
 
-您仍然可以使用环境变量配置与 fnOS 系统的连接：
+您可以使用命令行参数配置与 fnOS 系统的连接：
 
 ```bash
-FNOS_HOST=your-fnos-host FNOS_USER=your-username FNOS_PASSWORD=your-password uvx fnos-exporter
+uvx fnos-exporter --host your-fnos-host --user your-username --password your-password --port 9100
 ```
 
 ## 指标
@@ -44,11 +44,12 @@ FNOS_HOST=your-fnos-host FNOS_USER=your-username FNOS_PASSWORD=your-password uvx
 |-------------|------|-------------|
 | fnos_uptime | Gauge | fnOS 系统的正常运行时间信息（具体子指标取决于系统返回的内容） |
 
-## 环境变量
-
-- `FNOS_HOST`: fnOS 系统的主机名或 IP 地址（默认值：localhost）
-- `FNOS_USER`: 连接到 fnOS 系统的用户名（默认值：admin）
-- `FNOS_PASSWORD`: 连接到 fnOS 系统的密码（默认值：admin）
+## 命令行参数
+
+- `--host`: fnOS 系统的主机名或 IP 地址（必填）
+- `--user`: 连接到 fnOS 系统的用户名（必填）
+- `--password`: 连接到 fnOS 系统的密码（必填）
+- `--port`: 暴露 Prometheus 指标的端口（默认值：9100）
 
 ## 开发
 
@@ -58,16 +59,16 @@ FNOS_HOST=your-fnos-host FNOS_USER=your-username FNOS_PASSWORD=your-password uvx
 uv run python main.py
 ```
 
-在 Linux/macOS 上使用环境变量运行：
+在 Linux/macOS 上使用命令行参数运行：
 
 ```bash
 FNOS_HOST=your-fnos-host FNOS_USER=your-username FNOS_PASSWORD=your-password uv run python main.py
 ```
 
-在 Windows 上使用环境变量运行：
+在 Windows 上使用命令行参数运行：
 
 ```cmd
-set FNOS_HOST=your-fnos-host && set FNOS_USER=your-username && set FNOS_PASSWORD=your-password && uv run python main.py
+uv run python main.py --host your-fnos-host --user your-username --password your-password --port 9100
 ```
 
 运行测试（如果有的话）：

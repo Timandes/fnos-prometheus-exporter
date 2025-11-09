@@ -6,15 +6,18 @@ fnOS Prometheus Exporter
 A Prometheus exporter for fnOS systems that exposes system metrics.
 """
 
-import os
-import time
-import logging
-import signal
-import sys
-import threading
-import re
-from concurrent.futures import ThreadPoolExecutor
-from prometheus_client import start_http_server, Gauge, Info
+import os
+import time
+import logging
+import signal
+import sys
+import threading
+import re
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+from prometheus_client import Gauge, Info
+from wsgiref.simple_server import make_server
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -569,39 +572,111 @@ def collect_metrics(host, user, password):
             return False
 
 
-def main():
-    global running
-    
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
-    # Get configuration from environment variables
-    host = os.environ.get('FNOS_HOST', 'localhost')
-    user = os.environ.get('FNOS_USER', 'admin')
-    password = os.environ.get('FNOS_PASSWORD', 'admin')
-    
-    logger.info(f"Starting fnOS Exporter with host={host}, user={user}")
-    
-    # Start up the server to expose the metrics
-    start_http_server(8000)
-    logger.info("HTTP server started on port 8000")
-    logger.info("Exporter is now running. Press Ctrl+C to stop.")
-    
-    # Update metrics every 30 seconds
-    while running:
-        try:
-            collect_metrics(host, user, password)
-            # Sleep for 30 seconds but check running status every second
-            for _ in range(30):
-                if not running:
-                    break
-                time.sleep(1)
-        except Exception as e:
-            logger.error(f"Error in main loop: {e}")
-            # Continue running even if there's an error
-            time.sleep(1)
-
+def main():
+    global running
+
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='fnOS Prometheus Exporter')
+    parser.add_argument('--host', type=str, required=True, help='fnOS system host')
+    parser.add_argument('--user', type=str, required=True, help='fnOS system user')
+    parser.add_argument('--password', type=str, required=True, help='fnOS system password')
+    parser.add_argument('--port', type=int, default=9100, help='Port to expose Prometheus metrics (default: 9100)')
+    args = parser.parse_args()
+
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    logger.info(f"Starting fnOS Exporter with host={args.host}, user={args.user}, port={args.port}")
+    
+    # Create WSGI app for custom routing
+    def prometheus_wsgi_app(environ, start_response):
+        if environ['PATH_INFO'] == '/metrics':
+            # Serve metrics
+            data = generate_latest()
+            start_response('200 OK', [('Content-Type', CONTENT_TYPE_LATEST)])
+            return [data]
+        elif environ['PATH_INFO'] == '/':
+            # Serve custom home page with link to metrics
+            html_content = '''<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>fnOS Exporter</title>
+    <style>body {
+  font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,Noto Sans,Liberation Sans,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;
+  margin: 0;
+}
+header {
+  background-color: #e6522c;
+  color: #fff;
+  font-size: 1rem;
+  padding: 1rem;
+}
+main {
+  padding: 1rem;
+}
+label {
+  display: inline-block;
+  width: 0.5em;
+}
+#pprof {
+  border: black 2px solid;
+  padding: 1rem;
+  width: fit-content;
+}
+
+</style>
+  </head>
+  <body>
+    <header>
+      <h1>fnOS Exporter</h1>
+    </header>
+    <main>
+      <h2>fnOS Prometheus Exporter</h2>
+      <div><a href="/metrics">Metrics</a></div>
+      <p>Visit <a href="/metrics">/metrics</a> for Prometheus metrics.</p>
+    </main>
+  </body>
+</html>'''
+            start_response('200 OK', [('Content-Type', 'text/html')])
+            return [html_content.encode('utf-8')]
+        else:
+            # 404 for other paths
+            start_response('404 Not Found', [('Content-Type', 'text/plain')])
+            return [b'404: Not found']
+
+    # Start up the server to expose the metrics and custom home page
+    httpd = make_server('', args.port, prometheus_wsgi_app)
+    logger.info(f"HTTP server started on port {args.port}")
+    logger.info("Exporter is now running. Press Ctrl+C to stop. Metrics available at /metrics")
+    
+    # Start metrics collection in a separate thread
+    def metrics_collection_loop():
+        while running:
+            try:
+                collect_metrics(args.host, args.user, args.password)
+                # Sleep for 30 seconds but check running status every second
+                for _ in range(30):
+                    if not running:
+                        break
+                    time.sleep(1)
+            except Exception as e:
+                logger.error(f"Error in metrics collection loop: {e}")
+                # Continue running even if there's an error
+                time.sleep(1)
+
+    # Start the metrics collection thread
+    metrics_thread = threading.Thread(target=metrics_collection_loop, daemon=True)
+    metrics_thread.start()
+    
+    # Serve requests
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        logger.info("Received interrupt signal, shutting down...")
+        running = False
+
     logger.info("fnOS Exporter stopped")
 
 
