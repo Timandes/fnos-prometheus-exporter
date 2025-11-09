@@ -17,7 +17,7 @@ fnOS Prometheus Exporter 是一个基于 Python 的导出器，用于将 fnOS �
 
 ```bash
 docker run -d \
-  -e FNOS_HOST=your-fnos-host \
+  -e FNOS_HOST=127.0.0.1:5666 \
   -e FNOS_USER=your-username \
   -e FNOS_PASSWORD=your-password \
   -p 9100:9100 \
@@ -34,7 +34,7 @@ services:
   fnos-exporter:
     image: ghcr.io/timandes/fnos-prometheus-exporter:latest
     environment:
-      - FNOS_HOST=your-fnos-host
+      - FNOS_HOST=127.0.0.1:5666
       - FNOS_USER=your-username
       - FNOS_PASSWORD=your-password
     ports:
@@ -62,6 +62,12 @@ uvx fnos-exporter
 uvx fnos-exporter --host your-fnos-host --user your-username --password your-password --port 9100
 ```
 
+或者使用默认的本地主机地址：
+
+```bash
+uvx fnos-exporter --user your-username --password your-password
+```
+
 ## 指标
 
 | 指标名称 | 类型 | 描述 |
@@ -70,7 +76,7 @@ uvx fnos-exporter --host your-fnos-host --user your-username --password your-pas
 
 ## 命令行参数
 
-- `--host`: fnOS 系统的主机名或 IP 地址（必填）
+- `--host`: fnOS 系统的主机名或 IP 地址（默认值：127.0.0.1:5666）
 - `--user`: 连接到 fnOS 系统的用户名（必填）
 - `--password`: 连接到 fnOS 系统的密码（必填）
 - `--port`: 暴露 Prometheus 指标的端口（默认值：9100）
@@ -87,6 +93,12 @@ uv run python main.py
 
 ```bash
 uv run python main.py --host your-fnos-host --user your-username --password your-password --port 9100
+```
+
+或者使用默认的本地主机地址：
+
+```bash
+uv run python main.py --user your-username --password your-password
 ```
 
 运行测试（如果有的话）：

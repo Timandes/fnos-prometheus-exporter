@@ -577,7 +577,7 @@ def main():
 
     # Set up argument parser
     parser = argparse.ArgumentParser(description='fnOS Prometheus Exporter')
-    parser.add_argument('--host', type=str, required=True, help='fnOS system host')
+    parser.add_argument('--host', type=str, default='127.0.0.1:5666', help='fnOS system host (default: 127.0.0.1:5666)')
     parser.add_argument('--user', type=str, required=True, help='fnOS system user')
     parser.add_argument('--password', type=str, required=True, help='fnOS system password')
     parser.add_argument('--port', type=int, default=9100, help='Port to expose Prometheus metrics (default: 9100)')
