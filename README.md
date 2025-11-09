@@ -110,3 +110,42 @@ uv run pytest
 ## 许可证
 
 本项目根据 Apache 许可证 2.0 版获得许可 - 详情请参见 [LICENSE](LICENSE) 文件。
+
+## 问题排查
+
+### 如何在飞牛fnOS的Docker中部署？
+
+在飞牛fnOS环境下部署fnOS Prometheus Exporter时，可能需要特别注意网络配置：
+
+1）**使用Host网络模式**：可以通过在Docker Compose中设置 `network_mode: host` 来直接使用宿主机网络，这样容器可以直接访问fnOS系统的5666端口而无需额外的网络配置。
+
+2）**配置FNOS_HOST环境变量**：通过 `FNOS_HOST` 环境变量直接配置飞牛fnOS的IP地址和端口号组合，例如 `192.168.31.118:5666`。需要将 `192.168.31.118` 替换为你的fnOS系统的实际IP地址。
+
+在Docker Compose中示例配置：
+```yaml
+version: '3.8'
+services:
+  fnos-exporter:
+    image: ghcr.io/timandes/fnos-prometheus-exporter:latest
+    network_mode: host  # 使用宿主机网络模式
+    environment:
+      - FNOS_HOST=192.168.31.118:5666  # 替换为你的fnOS实际IP地址
+      - FNOS_USER=your-username
+      - FNOS_PASSWORD=your-password
+    restart: unless-stopped
+```
+
+或者不使用host网络模式时：
+```yaml
+version: '3.8'
+services:
+  fnos-exporter:
+    image: ghcr.io/timandes/fnos-prometheus-exporter:latest
+    environment:
+      - FNOS_HOST=192.168.31.118:5666  # 替换为你的fnOS实际IP地址
+      - FNOS_USER=your-username
+      - FNOS_PASSWORD=your-password
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+```
