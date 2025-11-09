@@ -137,7 +137,8 @@ async def collect_resource_metrics(resource_monitor, method_name, resource_type)
     try:
         # Get the method from the ResourceMonitor instance
         method = getattr(resource_monitor, method_name)
-        response = await method()
+        # Use a timeout of 10 seconds for resource metrics collection
+        response = await method(timeout=10.0)
         logger.debug(f"{resource_type} response: {response}")
 
         # Process the response data
@@ -160,6 +161,7 @@ async def collect_resource_metrics(resource_monitor, method_name, resource_type)
             logger.warning(f"No data in {resource_type} response")
     except Exception as e:
         logger.error(f"Error collecting {resource_type} metrics: {e}")
+        # Return instead of raising to prevent the exception from propagating and affecting the main metrics collection loop
 
 
 def set_resource_metrics(flattened_data, resource_type, entity_index=None):
@@ -236,7 +238,7 @@ async def collect_store_metrics(store_instance):
 
     try:
         # Get the general store data
-        response = await store_instance.general()
+        response = await store_instance.general(timeout=10.0)
         logger.debug(f"Store general response: {response}")
 
         # Process the response data
@@ -446,141 +448,166 @@ async def async_collect_metrics(host, user, password):
 
         # Get uptime data from system info
         if system_info_instance:
-            uptime_response = await system_info_instance.get_uptime()
-            logger.debug(f"Uptime response: {uptime_response}")
+            try:
+                uptime_response = await system_info_instance.get_uptime()
+                logger.debug(f"Uptime response: {uptime_response}")
 
-            # Process the response data
-            if uptime_response and "data" in uptime_response:
-                data = uptime_response["data"]
-                # Flatten the data dictionary
-                flattened_data = flatten_dict(data, sep='_')
+                # Process the response data
+                if uptime_response and "data" in uptime_response:
+                    data = uptime_response["data"]
+                    # Flatten the data dictionary
+                    flattened_data = flatten_dict(data, sep='_')
 
-                # Set metrics for each flattened key-value pair
-                for key, value in flattened_data.items():
-                    # Create a metric name with the prefix and flattened key
-                    metric_name = f"fnos_{key}"
+                    # Set metrics for each flattened key-value pair
+                    for key, value in flattened_data.items():
+                        # Create a metric name with the prefix and flattened key
+                        metric_name = f"fnos_{key}"
 
-                    # Check if value is numeric or string
-                    if isinstance(value, (int, float)):
-                        # Try to get existing gauge or create new one
-                        if metric_name not in gauges:
-                            try:
-                                gauges[metric_name] = Gauge(metric_name, f"fnOS metric for {key}")
-                            except ValueError:
-                                # Gauge might already exist in registry, try to get it
-                                from prometheus_client import REGISTRY
-                                gauges[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+                        # Check if value is numeric or string
+                        if isinstance(value, (int, float)):
+                            # Try to get existing gauge or create new one
+                            if metric_name not in gauges:
+                                try:
+                                    gauges[metric_name] = Gauge(metric_name, f"fnOS metric for {key}")
+                                except ValueError:
+                                    # Gauge might already exist in registry, try to get it
+                                    from prometheus_client import REGISTRY
+                                    gauges[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
 
-                        # Set the gauge value
-                        if metric_name in gauges and gauges[metric_name]:
-                            try:
-                                gauges[metric_name].set(value)
-                            except Exception as e:
-                                logger.warning(f"Failed to set gauge {metric_name}: {e}")
-                    else:
-                        # For string values, use Info metric
-                        # Convert key to snake_case for the metric name
-                        snake_key = camel_to_snake(key)
-                        info_name = f"fnos_{snake_key}"
-                        # Use the snake_case key for the info key as well
-                        info_key = snake_key
+                            # Set the gauge value
+                            if metric_name in gauges and gauges[metric_name]:
+                                try:
+                                    gauges[metric_name].set(value)
+                                except Exception as e:
+                                    logger.warning(f"Failed to set gauge {metric_name}: {e}")
+                        else:
+                            # For string values, use Info metric
+                            # Convert key to snake_case for the metric name
+                            snake_key = camel_to_snake(key)
+                            info_name = f"fnos_{snake_key}"
+                            # Use the snake_case key for the info key as well
+                            info_key = snake_key
 
-                        # Try to get existing info or create new one
-                        if info_name not in infos:
-                            try:
-                                infos[info_name] = Info(info_name, f"fnOS info for {snake_key}")
-                            except ValueError:
-                                # Info might already exist in registry, try to get it
-                                from prometheus_client import REGISTRY
-                                infos[info_name] = REGISTRY._names_to_collectors.get(info_name)
+                            # Try to get existing info or create new one
+                            if info_name not in infos:
+                                try:
+                                    infos[info_name] = Info(info_name, f"fnOS info for {snake_key}")
+                                except ValueError:
+                                    # Info might already exist in registry, try to get it
+                                    from prometheus_client import REGISTRY
+                                    infos[info_name] = REGISTRY._names_to_collectors.get(info_name)
 
-                        # Set the info value
-                        if info_name in infos and infos[info_name]:
-                            try:
-                                infos[info_name].info({info_key: str(value)})
-                            except Exception as e:
-                                logger.warning(f"Failed to set info {info_name}: {e}")
+                            # Set the info value
+                            if info_name in infos and infos[info_name]:
+                                try:
+                                    infos[info_name].info({info_key: str(value)})
+                                except Exception as e:
+                                    logger.warning(f"Failed to set info {metric_name}: {e}")
 
-                logger.info("Uptime metrics collected successfully from fnOS system")
-            else:
-                logger.warning("No data in uptime response")
+                    logger.info("Uptime metrics collected successfully from fnOS system")
+                else:
+                    logger.warning("No data in uptime response")
+            except Exception as e:
+                logger.error(f"Error getting uptime: {e}")
+                # Continue with other metrics collection even if uptime fails
 
             # Get host name data from system info
-            host_name_response = await system_info_instance.get_host_name()
-            logger.debug(f"Host name response: {host_name_response}")
+            try:
+                host_name_response = await system_info_instance.get_host_name()
+                logger.debug(f"Host name response: {host_name_response}")
 
-            # Process the response data
-            if host_name_response and "data" in host_name_response:
-                data = host_name_response["data"]
-                # Flatten the data dictionary
-                flattened_data = flatten_dict(data, sep='_')
+                # Process the response data
+                if host_name_response and "data" in host_name_response:
+                    data = host_name_response["data"]
+                    # Flatten the data dictionary
+                    flattened_data = flatten_dict(data, sep='_')
 
-                # Set metrics for each flattened key-value pair
-                for key, value in flattened_data.items():
-                    # Create a metric name with the prefix and flattened key
-                    metric_name = f"fnos_{key}"
+                    # Set metrics for each flattened key-value pair
+                    for key, value in flattened_data.items():
+                        # Create a metric name with the prefix and flattened key
+                        metric_name = f"fnos_{key}"
 
-                    # Check if value is numeric or string
-                    if isinstance(value, (int, float)):
-                        # Try to get existing gauge or create new one
-                        if metric_name not in gauges:
-                            try:
-                                gauges[metric_name] = Gauge(metric_name, f"fnOS metric for {key}")
-                            except ValueError:
-                                # Gauge might already exist in registry, try to get it
-                                from prometheus_client import REGISTRY
-                                gauges[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+                        # Check if value is numeric or string
+                        if isinstance(value, (int, float)):
+                            # Try to get existing gauge or create new one
+                            if metric_name not in gauges:
+                                try:
+                                    gauges[metric_name] = Gauge(metric_name, f"fnOS metric for {key}")
+                                except ValueError:
+                                    # Gauge might already exist in registry, try to get it
+                                    from prometheus_client import REGISTRY
+                                    gauges[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
 
-                        # Set the gauge value
-                        if metric_name in gauges and gauges[metric_name]:
-                            try:
-                                gauges[metric_name].set(value)
-                            except Exception as e:
-                                logger.warning(f"Failed to set gauge {metric_name}: {e}")
-                    else:
-                        # For string values, use Info metric
-                        # Convert key to snake_case for the metric name
-                        snake_key = camel_to_snake(key)
-                        info_name = f"fnos_{snake_key}"
-                        # Use the snake_case key for the info key as well
-                        info_key = snake_key
+                            # Set the gauge value
+                            if metric_name in gauges and gauges[metric_name]:
+                                try:
+                                    gauges[metric_name].set(value)
+                                except Exception as e:
+                                    logger.warning(f"Failed to set gauge {metric_name}: {e}")
+                        else:
+                            # For string values, use Info metric
+                            # Convert key to snake_case for the metric name
+                            snake_key = camel_to_snake(key)
+                            info_name = f"fnos_{snake_key}"
+                            # Use the snake_case key for the info key as well
+                            info_key = snake_key
 
-                        # Try to get existing info or create new one
-                        if info_name not in infos:
-                            try:
-                                infos[info_name] = Info(info_name, f"fnOS info for {snake_key}")
-                            except ValueError:
-                                # Info might already exist in registry, try to get it
-                                from prometheus_client import REGISTRY
-                                infos[info_name] = REGISTRY._names_to_collectors.get(info_name)
+                            # Try to get existing info or create new one
+                            if info_name not in infos:
+                                try:
+                                    infos[info_name] = Info(info_name, f"fnOS info for {snake_key}")
+                                except ValueError:
+                                    # Info might already exist in registry, try to get it
+                                    from prometheus_client import REGISTRY
+                                    infos[info_name] = REGISTRY._names_to_collectors.get(info_name)
 
-                        # Set the info value
-                        if info_name in infos and infos[info_name]:
-                            try:
-                                infos[info_name].info({info_key: str(value)})
-                            except Exception as e:
-                                logger.warning(f"Failed to set info {info_name}: {e}")
+                            # Set the info value
+                            if info_name in infos and infos[info_name]:
+                                try:
+                                    infos[info_name].info({info_key: str(value)})
+                                except Exception as e:
+                                    logger.warning(f"Failed to set info {info_name}: {e}")
 
-                logger.info("Host name metrics collected successfully from fnOS system")
+                    logger.info("Host name metrics collected successfully from fnOS system")
+            except Exception as e:
+                logger.error(f"Error getting host name: {e}")
+                # Continue with other metrics collection even if host name fails
 
             # Get resource monitor data
             if resource_monitor_instance:
-                # Collect CPU data
-                await collect_resource_metrics(resource_monitor_instance, "cpu", "CPU")
-
-                # Collect GPU data
-                await collect_resource_metrics(resource_monitor_instance, "gpu", "GPU")
-
-                # Collect memory data
-                await collect_resource_metrics(resource_monitor_instance, "memory", "Memory")
+                try:
+                    # Collect CPU data
+                    await collect_resource_metrics(resource_monitor_instance, "cpu", "CPU")
+                except Exception as e:
+                    logger.error(f"Error collecting CPU metrics: {e}")
+                
+                try:
+                    # Collect GPU data
+                    await collect_resource_metrics(resource_monitor_instance, "gpu", "GPU")
+                except Exception as e:
+                    logger.error(f"Error collecting GPU metrics: {e}")
+                
+                try:
+                    # Collect memory data
+                    await collect_resource_metrics(resource_monitor_instance, "memory", "Memory")
+                except Exception as e:
+                    logger.error(f"Error collecting memory metrics: {e}")
+            else:
+                logger.warning("Resource monitor instance not available, skipping resource metrics collection")
 
             # Get store data
             if store_instance:
-                store_success = await collect_store_metrics(store_instance)
-                if not store_success:
-                    # If store metrics collection fails, we might still want to return True
-                    # if other metrics were collected successfully
-                    logger.warning("Failed to collect store metrics")
+                try:
+                    store_success = await collect_store_metrics(store_instance)
+                    if not store_success:
+                        # If store metrics collection fails, we might still want to return True
+                        # if other metrics were collected successfully
+                        logger.warning("Failed to collect store metrics")
+                except Exception as e:
+                    logger.error(f"Error collecting store metrics: {e}")
+                    # Continue with other metrics collection even if store metrics fail
+            else:
+                logger.warning("Store instance not available, skipping store metrics collection")
 
             return True
         else:
@@ -589,7 +616,7 @@ async def async_collect_metrics(host, user, password):
 
     except ImportError as e:
         logger.error(f"Could not import FnosClient or SystemInfo: {e}")
-        return False
+        return True  # Return True to continue the metrics collection loop
     except Exception as e:
         logger.error(f"Error collecting metrics: {e}")
         # Reset client instance on error so we can reconnect on next attempt
@@ -597,7 +624,7 @@ async def async_collect_metrics(host, user, password):
         system_info_instance = None
         resource_monitor_instance = None
         store_instance = None
-        return False
+        return True  # Return True to continue the metrics collection loop instead of stopping it
 
 
 def collect_metrics(host, user, password):
@@ -616,7 +643,9 @@ def collect_metrics(host, user, password):
             system_info_instance = None
             resource_monitor_instance = None
             store_instance = None
-            return False
+            # Return True instead of False to prevent the metrics collection loop from stopping
+            # This allows the service to continue running even if one collection fails
+            return True
 
 
 def main():
