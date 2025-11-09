@@ -1,0 +1,4 @@
+# Global variables to maintain connection and system info instance
+client_instance = None
+system_info_instance = None
+gauges = {}  # Dictionary to store gauge instances
