@@ -1,0 +1,25 @@
+[project]
+name = "fnos-exporter"
+version = "0.1.0"
+description = "Prometheus Exporter for fnOS"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "prometheus-client>=0.20.0",
+    "fnos>=0.6.0",
+]
+
+[project.scripts]
+fnos-exporter = "main:main"
+
+[project.license]
+text = "Apache-2.0"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/fnos-exporter"
+Repository = "https://github.com/yourusername/fnos-exporter"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0.0",
+]
