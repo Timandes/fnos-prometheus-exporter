@@ -13,15 +13,15 @@ wheels = [
 
 [[package]]
 name = "fnos"
-version = "0.6.0"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pycryptodome" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/48/b6/c9f7f96c922ad15ec6edeefa4b57f11556f89f20b967aa0412a2fbbed01b/fnos-0.6.0.tar.gz", hash = "sha256:9978ffe00f384d990a586c908c6c7c860b24e3adc72edbe7dc66efdd60e93227", size = 15140 }
+sdist = { url = "https://files.pythonhosted.org/packages/3c/e0/9e27e73fe4fbd8b8e3a20cd85d58af48b5e79a43359e1cd8b579ed8e636d/fnos-0.7.0.tar.gz", hash = "sha256:5368b70576fbbd3037f8326edd5bd4d4a781425f188b936d7f612c0b4f28b6c8", size = 15983 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ac/a3/906994fc7577e04c7fbf92553cce83bbeb4a6d6040d02043d5fd33fd7b7d/fnos-0.6.0-py3-none-any.whl", hash = "sha256:2feea29c9e75851462440061730c6d61f4eb59da0a4c157b9cb3a96f659e7ffa", size = 18785 },
+    { url = "https://files.pythonhosted.org/packages/20/86/3c8a250560d2ac152c22b94c802d19fc06ceb76369324aa33b933af11887/fnos-0.7.0-py3-none-any.whl", hash = "sha256:bd3eaf8b9d62262e8341845fbc0fdfcf9b8f88805edf2ef57239435f52f577e8", size = 19476 },
 ]
 
 [[package]]
@@ -40,7 +40,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fnos", specifier = ">=0.6.0" },
+    { name = "fnos", specifier = ">=0.7.0" },
     { name = "prometheus-client", specifier = ">=0.20.0" },
 ]
 

@@ -335,6 +335,252 @@ async def collect_store_metrics(store_instance):
         return False
 
 
+async def collect_disk_metrics(store_instance):
+    """Collect disk metrics from Store using list_disks method"""
+    global gauges, infos
+
+    try:
+        # Get the disk data using list_disks method
+        response = await store_instance.list_disks(no_hot_spare=True, timeout=10.0)
+        logger.debug(f"Disk list response: {response}")
+
+        # Process the response data
+        if response and isinstance(response, dict):
+            # Check if we have disk data in the response
+            disk_data = None
+            if "disk" in response and isinstance(response["disk"], list):
+                disk_data = response["disk"]
+                logger.debug(f"Found disk field in response: {disk_data}")
+            elif "data" in response:
+                # Check if data field contains disk information
+                if isinstance(response["data"], list):
+                    disk_data = response["data"]
+                    logger.debug(f"Found data field in disk response: {disk_data}")
+                elif isinstance(response["data"], dict) and "disk" in response["data"] and isinstance(response["data"]["disk"], list):
+                    disk_data = response["data"]["disk"]
+                    logger.debug(f"Found data.disk field in disk response: {disk_data}")
+            else:
+                # Use the entire response as data if no specific fields exist
+                if isinstance(response, list):
+                    disk_data = response
+                    logger.debug(f"Using entire response as disk data: {disk_data}")
+
+            # Process disk data if it exists
+            if disk_data and isinstance(disk_data, list):
+                logger.debug(f"Processing {len(disk_data)} disk entities")
+                # Process each disk entity
+                for entity_data in disk_data:
+                    logger.debug(f"Processing disk entity: {entity_data}")
+                    # Flatten the entity data
+                    flattened_data = flatten_dict(entity_data, sep='_')
+                    # Set metrics with disk name as tag (i parameter is kept for function signature compatibility but not used in the function)
+                    set_disk_metrics(flattened_data, None)
+
+                logger.info("Disk metrics collected successfully from fnOS system")
+                return True
+            else:
+                logger.warning("No disk data found in list_disks response")
+                logger.debug(f"Response content: {response}")
+                return False
+        else:
+            logger.warning("No valid response data from list_disks")
+            return False
+    except Exception as e:
+        logger.error(f"Error collecting disk metrics: {e}")
+        return False
+
+
+async def collect_disk_performance_metrics(resource_monitor_instance):
+    """Collect disk performance metrics from ResourceMonitor using disk method"""
+    global gauges, infos
+
+    try:
+        # Get the disk performance data using disk method
+        response = await resource_monitor_instance.disk(timeout=10.0)
+        logger.debug(f"Disk performance response: {response}")
+
+        # Process the response data
+        if response and isinstance(response, dict) and "data" in response and isinstance(response["data"], dict):
+            # Get the disk data from the response
+            disk_data = response["data"]
+            
+            # Check if disk data exists and is a list
+            if "disk" in disk_data and isinstance(disk_data["disk"], list):
+                disk_list = disk_data["disk"]
+                logger.debug(f"Processing {len(disk_list)} disk performance entities")
+                
+                # Process each disk entity
+                for entity_data in disk_list:
+                    logger.debug(f"Processing disk performance entity: {entity_data}")
+                    # Flatten the entity data
+                    flattened_data = flatten_dict(entity_data, sep='_')
+                    # Set metrics with disk name as tag (i parameter is kept for function signature compatibility but not used in the function)
+                    set_disk_performance_metrics(flattened_data, None)
+
+                logger.info("Disk performance metrics collected successfully from fnOS system")
+                return True
+            else:
+                logger.warning("No disk performance data found in ResourceMonitor.disk response")
+                logger.debug(f"Disk data content: {disk_data}")
+                return False
+        else:
+            logger.warning("No valid response data from ResourceMonitor.disk")
+            return False
+    except Exception as e:
+        logger.error(f"Error collecting disk performance metrics: {e}")
+        return False
+
+
+def set_disk_performance_metrics(flattened_data, entity_index=None):
+    """Set disk performance metrics with device name as tags"""
+    global gauges, infos
+
+    # Extract disk name from the flattened data if available
+    disk_name = None
+    if 'name' in flattened_data:
+        disk_name = flattened_data['name']
+    elif 'disk_name' in flattened_data:
+        disk_name = flattened_data['disk_name']
+
+    # Process each flattened key-value pair
+    for key, value in flattened_data.items():
+        # Create a metric name with the prefix and flattened key
+        metric_name = f"fnos_disk_{key}"
+
+        # Convert metric name to snake_case
+        metric_name = camel_to_snake(metric_name)
+
+        # Create labels dictionary for device name if available
+        labels = {}
+        if disk_name is not None:
+            labels['device_name'] = str(disk_name)
+
+        # Check if value is numeric or string
+        if isinstance(value, (int, float)):
+            # Try to get existing gauge or create new one
+            gauge_key = f"{metric_name}_{disk_name}" if disk_name is not None else metric_name
+            if gauge_key not in gauges:
+                try:
+                    if labels:
+                        gauges[gauge_key] = Gauge(metric_name, f"fnOS disk metric for {key}", list(labels.keys()))
+                    else:
+                        gauges[gauge_key] = Gauge(metric_name, f"fnOS disk metric for {key}")
+                except ValueError:
+                    # Gauge might already exist in registry, try to get it
+                    from prometheus_client import REGISTRY
+                    gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+
+            # Set the gauge value with labels if provided
+            if gauge_key in gauges and gauges[gauge_key]:
+                try:
+                    if labels:
+                        gauges[gauge_key].labels(**labels).set(value)
+                    else:
+                        gauges[gauge_key].set(value)
+                except Exception as e:
+                    logger.warning(f"Failed to set gauge {metric_name}: {e}")
+        else:
+            # For string values, use Info metric
+            info_key = camel_to_snake(key)
+
+            # Try to get existing info or create new one
+            if metric_name not in infos:
+                try:
+                    if labels:
+                        infos[metric_name] = Info(metric_name, f"fnOS disk info for {key}", list(labels.keys()))
+                    else:
+                        infos[metric_name] = Info(metric_name, f"fnOS disk info for {key}")
+                except ValueError:
+                    # Info might already exist in registry, try to get it
+                    from prometheus_client import REGISTRY
+                    infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+
+            # Set the info value with labels if provided
+            if metric_name in infos and infos[metric_name]:
+                try:
+                    if labels:
+                        infos[metric_name].labels(**labels).info({info_key: str(value)})
+                    else:
+                        infos[metric_name].info({info_key: str(value)})
+                except Exception as e:
+                    logger.warning(f"Failed to set info {metric_name}: {e}")
+
+
+def set_disk_metrics(flattened_data, entity_index=None):
+    """Set disk metrics with disk name as tags"""
+    global gauges, infos
+
+    # Extract disk name from the flattened data if available
+    disk_name = None
+    if 'name' in flattened_data:
+        disk_name = flattened_data['name']
+    elif 'disk_name' in flattened_data:
+        disk_name = flattened_data['disk_name']
+    
+    # Process each flattened key-value pair
+    for key, value in flattened_data.items():
+        # Create a metric name with the prefix and flattened key
+        metric_name = f"fnos_disk_{key}"
+
+        # Convert metric name to snake_case
+        metric_name = camel_to_snake(metric_name)
+
+        # Create labels dictionary for device name if available
+        labels = {}
+        if disk_name is not None:
+            labels['device_name'] = str(disk_name)
+
+        # Check if value is numeric or string
+        if isinstance(value, (int, float)):
+            # Try to get existing gauge or create new one
+            gauge_key = f"{metric_name}_{disk_name}" if disk_name is not None else metric_name
+            if gauge_key not in gauges:
+                try:
+                    if labels:
+                        gauges[gauge_key] = Gauge(metric_name, f"fnOS disk metric for {key}", list(labels.keys()))
+                    else:
+                        gauges[gauge_key] = Gauge(metric_name, f"fnOS disk metric for {key}")
+                except ValueError:
+                    # Gauge might already exist in registry, try to get it
+                    from prometheus_client import REGISTRY
+                    gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+
+            # Set the gauge value with labels if provided
+            if gauge_key in gauges and gauges[gauge_key]:
+                try:
+                    if labels:
+                        gauges[gauge_key].labels(**labels).set(value)
+                    else:
+                        gauges[gauge_key].set(value)
+                except Exception as e:
+                    logger.warning(f"Failed to set gauge {metric_name}: {e}")
+        else:
+            # For string values, use Info metric
+            info_key = camel_to_snake(key)
+
+            # Try to get existing info or create new one
+            if metric_name not in infos:
+                try:
+                    if labels:
+                        infos[metric_name] = Info(metric_name, f"fnOS disk info for {key}", list(labels.keys()))
+                    else:
+                        infos[metric_name] = Info(metric_name, f"fnOS disk info for {key}")
+                except ValueError:
+                    # Info might already exist in registry, try to get it
+                    from prometheus_client import REGISTRY
+                    infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+
+            # Set the info value with labels if provided
+            if metric_name in infos and infos[metric_name]:
+                try:
+                    if labels:
+                        infos[metric_name].labels(**labels).info({info_key: str(value)})
+                    else:
+                        infos[metric_name].info({info_key: str(value)})
+                except Exception as e:
+                    logger.warning(f"Failed to set info {metric_name}: {e}")
+
+
 def set_store_metrics(flattened_data, entity_index=None, entity_type=None):
     """Set store metrics with entity index and type as tags"""
     global gauges, infos
@@ -592,6 +838,12 @@ async def async_collect_metrics(host, user, password):
                     await collect_resource_metrics(resource_monitor_instance, "memory", "Memory")
                 except Exception as e:
                     logger.error(f"Error collecting memory metrics: {e}")
+                
+                try:
+                    # Collect disk performance data
+                    await collect_disk_performance_metrics(resource_monitor_instance)
+                except Exception as e:
+                    logger.error(f"Error collecting disk performance metrics: {e}")
             else:
                 logger.warning("Resource monitor instance not available, skipping resource metrics collection")
 
@@ -606,8 +858,19 @@ async def async_collect_metrics(host, user, password):
                 except Exception as e:
                     logger.error(f"Error collecting store metrics: {e}")
                     # Continue with other metrics collection even if store metrics fail
+                    
+                # Get disk data
+                try:
+                    disk_success = await collect_disk_metrics(store_instance)
+                    if not disk_success:
+                        # If disk metrics collection fails, we might still want to return True
+                        # if other metrics were collected successfully
+                        logger.warning("Failed to collect disk metrics")
+                except Exception as e:
+                    logger.error(f"Error collecting disk metrics: {e}")
+                    # Continue with other metrics collection even if disk metrics fail
             else:
-                logger.warning("Store instance not available, skipping store metrics collection")
+                logger.warning("Store instance not available, skipping store and disk metrics collection")
 
             return True
         else:

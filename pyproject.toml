@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "prometheus-client>=0.20.0",
-    "fnos>=0.6.0",
+    "fnos>=0.7.0",
 ]
 
 [project.scripts]
