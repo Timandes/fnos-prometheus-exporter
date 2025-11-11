@@ -76,6 +76,7 @@ uvx fnos-exporter --user your-username --password your-password
 |-------------|------|-------------|
 | fnos_uptime | Gauge | fnOS 系统的正常运行时间信息（具体子指标取决于系统返回的内容） |
 | fnos_disk_* | Gauge/Info | 从Store.list_disks()和ResourceMonitor.disk()方法获取的磁盘相关信息 |
+| fnos_store_* | Gauge/Info | 从Store.general()方法获取的存储系统相关信息 |
 
 ### fnos_disk_* 指标详情
 
@@ -99,6 +100,81 @@ uvx fnos-exporter --user your-username --password your-password
 | fnos_disk_busy | Gauge | ResourceMonitor.disk() | 磁盘是否处于忙碌状态（0=否，1=是） |
 | fnos_disk_read | Gauge | ResourceMonitor.disk() | 磁盘读取操作计数 |
 | fnos_disk_write | Gauge | ResourceMonitor.disk() | 磁盘写入操作计数 |
+
+### fnos_store_* 指标详情
+
+这些指标来源于fnOS的`Store.general()` API端点，用于获取存储系统的通用信息。该API返回包含存储阵列(array)和块设备(block)的详细信息，包括RAID配置、存储池状态、卷信息等。
+
+所有`fnos_store_*`指标都使用`entity`和`type`标签来区分不同类型的存储实体：
+- `entity`标签表示存储实体的索引号（如array0、block0等）
+- `type`标签表示存储实体的类型（如"array"、"block"、"array_md"、"block_md"、"block_partition"、"block_arr_device"等）
+
+### fnos_store_array_* 指标详情
+这些指标来源于`Store.general()`响应中的`array`数据结构，主要包含RAID阵列信息。
+
+| 指标名称 | 类型 | 来源API | 描述 |
+|-------------|------|---------|-------------|
+| fnos_store_array_name | Info | Store.general() | 存储阵列的名称 |
+| fnos_store_array_type | Info | Store.general() | 存储阵列的类型（如RAID0、RAID1、RAID5等） |
+| fnos_store_array_status | Info | Store.general() | 存储阵列的当前状态 |
+| fnos_store_array_size | Gauge | Store.general() | 存储阵列的总大小（字节） |
+| fnos_store_array_used | Gauge | Store.general() | 存储阵列已使用的空间（字节） |
+| fnos_store_array_free | Gauge | Store.general() | 存储阵列可用的空间（字节） |
+| fnos_store_array_fssize | Gauge | Store.general() | 存储阵列的文件系统块大小（字节） |
+| fnos_store_array_frsize | Gauge | Store.general() | 存储阵列的文件系统可用块大小（字节） |
+| fnos_store_array_health | Info | Store.general() | 存储阵列的健康状态 |
+
+### fnos_store_block_* 指标详情
+这些指标来源于`Store.general()`响应中的`block`数据结构，主要包含块设备信息。
+
+| 指标名称 | 类型 | 来源API | 描述 |
+|-------------|------|---------|-------------|
+| fnos_store_block_name | Info | Store.general() | 块设备的名称 |
+| fnos_store_block_size | Gauge | Store.general() | 块设备的总大小（字节） |
+| fnos_store_block_type | Info | Store.general() | 块设备的类型（如HDD、SSD等） |
+| fnos_store_block_status | Info | Store.general() | 块设备的当前状态 |
+| fnos_store_block_model | Info | Store.general() | 块设备的型号 |
+| fnos_store_block_serial | Info | Store.general() | 块设备的序列号 |
+| fnos_store_block_health | Info | Store.general() | 块设备的健康状态 |
+| fnos_store_block_temp | Gauge | Store.general() | 块设备的温度（摄氏度） |
+
+### fnos_store_array_md_* 指标详情
+这些指标来源于`Store.general()`响应中array实体下的`md`数据结构，主要包含RAID阵列中成员磁盘的详细信息。
+
+| 指标名称 | 类型 | 来源API | 描述 |
+|-------------|------|---------|-------------|
+| fnos_store_array_md_name | Info | Store.general() | 阵列中成员磁盘的名称 |
+| fnos_store_array_md_status | Info | Store.general() | 阵列中成员磁盘的状态 |
+| fnos_store_array_md_size | Gauge | Store.general() | 阵列中成员磁盘的大小（字节） |
+
+### fnos_store_block_md_* 指标详情
+这些指标来源于`Store.general()`响应中block实体下的`md`数据结构，主要包含块设备中MD设备的详细信息。
+
+| 指标名称 | 类型 | 来源API | 描述 |
+|-------------|------|---------|-------------|
+| fnos_store_block_md_name | Info | Store.general() | 块设备中MD设备的名称 |
+| fnos_store_block_md_status | Info | Store.general() | 块设备中MD设备的状态 |
+| fnos_store_block_md_level | Info | Store.general() | MD设备的RAID级别 |
+
+### fnos_store_block_partition_* 指标详情
+这些指标来源于`Store.general()`响应中block实体下的`partitions`数据结构，主要包含块设备分区信息。
+
+| 指标名称 | 类型 | 来源API | 描述 |
+|-------------|------|---------|-------------|
+| fnos_store_block_partition_name | Info | Store.general() | 分区的名称 |
+| fnos_store_block_partition_size | Gauge | Store.general() | 分区的总大小（字节） |
+| fnos_store_block_partition_filesystem | Info | Store.general() | 分区的文件系统类型 |
+| fnos_store_block_partition_mount_point | Info | Store.general() | 分区的挂载点 |
+| fnos_store_block_partition_status | Info | Store.general() | 分区的当前状态 |
+
+### fnos_store_block_arr_device_* 指标详情
+这些指标来源于`Store.general()`响应中block实体下的`arr-devices`数据结构，主要包含块设备关联的阵列设备信息。
+
+| 指标名称 | 类型 | 来源API | 描述 |
+|-------------|------|---------|-------------|
+| fnos_store_block_arr_device_name | Info | Store.general() | 关联阵列设备的名称 |
+| fnos_store_block_arr_device_size | Gauge | Store.general() | 关联阵列设备的大小（字节） |
+| fnos_store_block_arr_device_status | Info | Store.general() | 关联阵列设备的状态 |
 
 ## 命令行参数
 
