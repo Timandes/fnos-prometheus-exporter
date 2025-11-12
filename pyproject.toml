@@ -16,10 +16,11 @@ fnos-exporter = "main:main"
 text = "Apache-2.0"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/fnos-exporter"
-Repository = "https://github.com/yourusername/fnos-exporter"
+Homepage = "https://github.com/Timandes/fnos-prometheus-exporter"
+Repository = "https://github.com/Timandes/fnos-prometheus-exporter"
 
 [tool.uv]
 dev-dependencies = [
     "pytest>=7.0.0",
+    "twine>=4.0.0",
 ]

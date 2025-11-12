@@ -1,6 +1,14 @@
 # fnOS Prometheus Exporter
 
+[![PyPI](https://img.shields.io/pypi/v/fnos-exporter.svg)](https://pypi.org/project/fnos-exporter/)
+[![License](https://img.shields.io/github/license/Timandes/fnos-prometheus-exporter.svg)](https://github.com/Timandes/fnos-prometheus-exporter/blob/master/LICENSE)
+
 fnOS Prometheus Exporter 是一个基于 Python 的导出器，用于将 fnOS 系统的指标暴露给 Prometheus。
+
+## 源代码
+
+- 源代码仓库: [https://github.com/Timandes/fnos-prometheus-exporter](https://github.com/Timandes/fnos-prometheus-exporter)
+- 问题追踪: [https://github.com/Timandes/fnos-prometheus-exporter/issues](https://github.com/Timandes/fnos-prometheus-exporter/issues)
 
 ## 功能特性
 
