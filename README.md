@@ -101,6 +101,22 @@ uvx fnos-exporter --user your-username --password your-password
 | fnos_disk_read | Gauge | ResourceMonitor.disk() | 磁盘读取操作计数 |
 | fnos_disk_write | Gauge | ResourceMonitor.disk() | 磁盘写入操作计数 |
 
+### fnos_cpu_* 指标详情
+
+这些指标来源于fnOS的`ResourceMonitor.cpu()` API端点，用于获取CPU的使用情况、温度等性能指标。
+
+所有`fnos_cpu_*`指标都使用`cpu_name`标签来区分不同的CPU实例（如"Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz"等），值来自于CPU的名称信息。
+
+对于多核CPU温度指标，使用`core`标签来区分不同核心的温度：
+- `cpu_name`标签表示CPU的名称
+- `core`标签表示CPU核心的索引号（如core0、core1等）
+
+| 指标名称 | 类型 | 来源API | 描述 |
+|-------------|------|---------|-------------|
+| fnos_cpu_name | Info | ResourceMonitor.cpu() | CPU的名称 |
+| fnos_cpu_usage | Gauge | ResourceMonitor.cpu() | CPU使用率百分比 |
+| fnos_cpu_temp | Gauge | ResourceMonitor.cpu() | CPU温度（摄氏度），按cpu_name和core拆分 |
+
 ### fnos_store_* 指标详情
 
 这些指标来源于fnOS的`Store.general()` API端点，用于获取存储系统的通用信息。该API返回包含存储阵列(array)和块设备(block)的详细信息，包括RAID配置、存储池状态、卷信息等。

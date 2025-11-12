@@ -168,6 +168,14 @@ def set_resource_metrics(flattened_data, resource_type, entity_index=None):
     """Set resource metrics with entity index as tags"""
     global gauges, infos
 
+    # Extract CPU name from the flattened data if available for CPU metrics
+    cpu_name = None
+    if resource_type.lower() == "cpu":
+        if 'name' in flattened_data:
+            cpu_name = flattened_data['name']
+        elif 'cpu_name' in flattened_data:
+            cpu_name = flattened_data['cpu_name']
+
     # Process each flattened key-value pair
     for key, value in flattened_data.items():
         # Create a metric name with the prefix and flattened key
@@ -178,58 +186,134 @@ def set_resource_metrics(flattened_data, resource_type, entity_index=None):
 
         # Create labels dictionary for entity index if provided
         labels = {}
-        if entity_index is not None:
+        if cpu_name is not None:
+            # For CPU metrics, use cpu_name as label instead of entity
+            labels['cpu_name'] = str(cpu_name)
+        elif entity_index is not None:
             labels['entity'] = str(entity_index)
 
-        # Check if value is numeric or string
-        if isinstance(value, (int, float)):
-            # Try to get existing gauge or create new one
-            gauge_key = f"{metric_name}_{entity_index}" if entity_index is not None else metric_name
-            if gauge_key not in gauges:
-                try:
-                    if labels:
-                        gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}", list(labels.keys()))
-                    else:
-                        gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}")
-                except ValueError:
-                    # Gauge might already exist in registry, try to get it
-                    from prometheus_client import REGISTRY
-                    gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+        # Special handling for CPU temperature metrics
+        if resource_type.lower() == "cpu" and "temp" in key.lower():
+            # If value is a list, handle each temperature individually
+            if isinstance(value, list):
+                # For each temperature in the list, create a separate metric
+                for i, temp_value in enumerate(value):
+                    if isinstance(temp_value, (int, float)):
+                        # Create a metric name for each temperature entry
+                        temp_metric_name = metric_name
+                        temp_labels = labels.copy()
+                        # Add core label for each temperature in the list
+                        temp_labels['core'] = str(i)
+                        
+                        # Try to get existing gauge or create new one
+                        gauge_key = f"{temp_metric_name}_{'_'.join(f'{k}_{v}' for k, v in temp_labels.items())}" if temp_labels else temp_metric_name
+                        if gauge_key not in gauges:
+                            try:
+                                if temp_labels:
+                                    gauges[gauge_key] = Gauge(temp_metric_name, f"fnOS {resource_type} metric for {key}", list(temp_labels.keys()))
+                                else:
+                                    gauges[gauge_key] = Gauge(temp_metric_name, f"fnOS {resource_type} metric for {key}")
+                            except ValueError:
+                                # Gauge might already exist in registry, try to get it
+                                from prometheus_client import REGISTRY
+                                gauges[gauge_key] = REGISTRY._names_to_collectors.get(temp_metric_name)
 
-            # Set the gauge value with labels if provided
-            if gauge_key in gauges and gauges[gauge_key]:
-                try:
-                    if labels:
+                        # Set the gauge value with labels if provided
+                        if gauge_key in gauges and gauges[gauge_key]:
+                            try:
+                                gauges[gauge_key].labels(**temp_labels).set(temp_value)
+                            except Exception as e:
+                                logger.warning(f"Failed to set gauge {temp_metric_name}: {e}")
+            elif isinstance(value, (int, float)):
+                # For single numeric temperature value, use it directly as the metric value
+                # Try to get existing gauge or create new one
+                gauge_key = f"{metric_name}_{'_'.join(f'{k}_{v}' for k, v in labels.items())}" if labels else metric_name
+                if gauge_key not in gauges:
+                    try:
+                        if labels:
+                            gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}", list(labels.keys()))
+                        else:
+                            gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}")
+                    except ValueError:
+                        # Gauge might already exist in registry, try to get it
+                        from prometheus_client import REGISTRY
+                        gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+
+                # Set the gauge value with labels if provided
+                if gauge_key in gauges and gauges[gauge_key]:
+                    try:
                         gauges[gauge_key].labels(**labels).set(value)
-                    else:
-                        gauges[gauge_key].set(value)
-                except Exception as e:
-                    logger.warning(f"Failed to set gauge {metric_name}: {e}")
-        else:
-            # For string values, use Info metric
-            info_key = camel_to_snake(key)
+                    except Exception as e:
+                        logger.warning(f"Failed to set gauge {metric_name}: {e}")
+            else:
+                # For string values, use Info metric
+                info_key = camel_to_snake(key)
 
-            # Try to get existing info or create new one
-            if metric_name not in infos:
-                try:
-                    if labels:
-                        infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}", list(labels.keys()))
-                    else:
-                        infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}")
-                except ValueError:
-                    # Info might already exist in registry, try to get it
-                    from prometheus_client import REGISTRY
-                    infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+                # Try to get existing info or create new one
+                if metric_name not in infos:
+                    try:
+                        if labels:
+                            infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}", list(labels.keys()))
+                        else:
+                            infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}")
+                    except ValueError:
+                        # Info might already exist in registry, try to get it
+                        from prometheus_client import REGISTRY
+                        infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
 
-            # Set the info value with labels if provided
-            if metric_name in infos and infos[metric_name]:
-                try:
-                    if labels:
+                # Set the info value with labels if provided
+                if metric_name in infos and infos[metric_name]:
+                    try:
                         infos[metric_name].labels(**labels).info({info_key: str(value)})
-                    else:
-                        infos[metric_name].info({info_key: str(value)})
-                except Exception as e:
-                    logger.warning(f"Failed to set info {metric_name}: {e}")
+                    except Exception as e:
+                        logger.warning(f"Failed to set info {metric_name}: {e}")
+        else:
+            # Check if value is numeric or string (for non-CPU-temp metrics)
+            if isinstance(value, (int, float)):
+                # Try to get existing gauge or create new one
+                gauge_key = f"{metric_name}_{'_'.join(f'{k}_{v}' for k, v in labels.items())}" if labels else metric_name
+                if gauge_key not in gauges:
+                    try:
+                        if labels:
+                            gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}", list(labels.keys()))
+                        else:
+                            gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}")
+                    except ValueError:
+                        # Gauge might already exist in registry, try to get it
+                        from prometheus_client import REGISTRY
+                        gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+
+                # Set the gauge value with labels if provided
+                if gauge_key in gauges and gauges[gauge_key]:
+                    try:
+                        gauges[gauge_key].labels(**labels).set(value)
+                    except Exception as e:
+                        logger.warning(f"Failed to set gauge {metric_name}: {e}")
+            else:
+                # For string values, use Info metric
+                info_key = camel_to_snake(key)
+
+                # Try to get existing info or create new one
+                if metric_name not in infos:
+                    try:
+                        if labels:
+                            infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}", list(labels.keys()))
+                        else:
+                            infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}")
+                    except ValueError:
+                        # Info might already exist in registry, try to get it
+                        from prometheus_client import REGISTRY
+                        infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+
+                # Set the info value with labels if provided
+                if metric_name in infos and infos[metric_name]:
+                    try:
+                        if labels:
+                            infos[metric_name].labels(**labels).info({info_key: str(value)})
+                        else:
+                            infos[metric_name].info({info_key: str(value)})
+                    except Exception as e:
+                        logger.warning(f"Failed to set info {metric_name}: {e}")
 
 
 async def collect_store_metrics(store_instance):
