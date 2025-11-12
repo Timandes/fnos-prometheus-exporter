@@ -105,12 +105,16 @@ uvx fnos-exporter --user your-username --password your-password
 
 这些指标来源于fnOS的`Store.general()` API端点，用于获取存储系统的通用信息。该API返回包含存储阵列(array)和块设备(block)的详细信息，包括RAID配置、存储池状态、卷信息等。
 
-所有`fnos_store_*`指标都使用`entity`和`type`标签来区分不同类型的存储实体：
-- `entity`标签表示存储实体的索引号（如array0、block0等）
-- `type`标签表示存储实体的类型（如"array"、"block"、"array_md"、"block_md"、"block_partition"、"block_arr_device"等）
+对于不同类型的存储实体，指标使用不同的标签：
+- 对于`array`类型实体（如fnos_store_array_*），使用`array_name`标签来区分不同的存储阵列，值来自于阵列的名称
+- 对于其他类型实体（如block、array_md等），使用`entity`和`type`标签来区分：
+  - `entity`标签表示存储实体的索引号（如array0、block0等）
+  - `type`标签表示存储实体的类型（如"array"、"block"、"array_md"、"block_md"、"block_partition"、"block_arr_device"等）
 
 ### fnos_store_array_* 指标详情
 这些指标来源于`Store.general()`响应中的`array`数据结构，主要包含RAID阵列信息。
+
+所有`fnos_store_array_*`指标都使用`array_name`标签来区分不同的存储阵列，值来自于阵列的名称。
 
 | 指标名称 | 类型 | 来源API | 描述 |
 |-------------|------|---------|-------------|
@@ -127,6 +131,8 @@ uvx fnos-exporter --user your-username --password your-password
 ### fnos_store_block_* 指标详情
 这些指标来源于`Store.general()`响应中的`block`数据结构，主要包含块设备信息。
 
+所有`fnos_store_block_*`指标都使用`block_name`标签来区分不同的块设备，值来自于块设备的名称。
+
 | 指标名称 | 类型 | 来源API | 描述 |
 |-------------|------|---------|-------------|
 | fnos_store_block_name | Info | Store.general() | 块设备的名称 |
@@ -141,6 +147,10 @@ uvx fnos-exporter --user your-username --password your-password
 ### fnos_store_array_md_* 指标详情
 这些指标来源于`Store.general()`响应中array实体下的`md`数据结构，主要包含RAID阵列中成员磁盘的详细信息。
 
+所有`fnos_store_array_md_*`指标都使用`array_name`和`entity`标签来区分不同的存储阵列和成员磁盘：
+- `array_name`标签表示存储阵列的名称
+- `entity`标签表示成员磁盘在阵列中的索引号
+
 | 指标名称 | 类型 | 来源API | 描述 |
 |-------------|------|---------|-------------|
 | fnos_store_array_md_name | Info | Store.general() | 阵列中成员磁盘的名称 |
@@ -150,6 +160,10 @@ uvx fnos-exporter --user your-username --password your-password
 ### fnos_store_block_md_* 指标详情
 这些指标来源于`Store.general()`响应中block实体下的`md`数据结构，主要包含块设备中MD设备的详细信息。
 
+所有`fnos_store_block_md_*`指标都使用`block_name`和`entity`标签来区分不同的块设备和MD设备：
+- `block_name`标签表示块设备的名称
+- `entity`标签表示MD设备在块设备中的索引号
+
 | 指标名称 | 类型 | 来源API | 描述 |
 |-------------|------|---------|-------------|
 | fnos_store_block_md_name | Info | Store.general() | 块设备中MD设备的名称 |
@@ -158,6 +172,10 @@ uvx fnos-exporter --user your-username --password your-password
 
 ### fnos_store_block_partition_* 指标详情
 这些指标来源于`Store.general()`响应中block实体下的`partitions`数据结构，主要包含块设备分区信息。
+
+所有`fnos_store_block_partition_*`指标都使用`block_name`和`entity`标签来区分不同的块设备和分区：
+- `block_name`标签表示块设备的名称
+- `entity`标签表示分区在块设备中的索引号
 
 | 指标名称 | 类型 | 来源API | 描述 |
 |-------------|------|---------|-------------|
@@ -169,6 +187,10 @@ uvx fnos-exporter --user your-username --password your-password
 
 ### fnos_store_block_arr_device_* 指标详情
 这些指标来源于`Store.general()`响应中block实体下的`arr-devices`数据结构，主要包含块设备关联的阵列设备信息。
+
+所有`fnos_store_block_arr_device_*`指标都使用`block_name`和`entity`标签来区分不同的块设备和关联阵列设备：
+- `block_name`标签表示块设备的名称
+- `entity`标签表示关联阵列设备在块设备中的索引号
 
 | 指标名称 | 类型 | 来源API | 描述 |
 |-------------|------|---------|-------------|

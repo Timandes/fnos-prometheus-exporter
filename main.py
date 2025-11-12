@@ -598,8 +598,22 @@ def set_store_metrics(flattened_data, entity_index=None, entity_type=None):
 
         # Create labels dictionary for entity index and type if provided
         labels = {}
-        if entity_index is not None:
+        # Special handling for array entities - use array_name instead of entity index
+        if entity_index is not None and entity_type and entity_type.startswith("array"):
+            # For array entities, try to extract the array name from the data
+            array_name = flattened_data.get('name', str(entity_index))
+            labels['array_name'] = str(array_name)
+        # Special handling for block entities - use block_name instead of entity index
+        elif entity_index is not None and entity_type and entity_type.startswith("block"):
+            # For block entities, try to extract the block name from the data (excluding subtypes like block_md, block_partition)
+            if entity_type in ['block', 'block_partition', 'block_arr_device'] and 'name' in flattened_data:
+                block_name = flattened_data.get('name', str(entity_index))
+                labels['block_name'] = str(block_name)
+            else:
+                labels['entity'] = str(entity_index)
+        elif entity_index is not None:
             labels['entity'] = str(entity_index)
+            
         if entity_type:
             labels['type'] = entity_type
 
