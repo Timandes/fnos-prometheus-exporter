@@ -145,8 +145,14 @@ async def collect_resource_metrics(resource_monitor, method_name, resource_type)
         if response and "data" in response:
             data = response["data"]
 
+            # Special handling for memory data - it has nested structure
+            if resource_type.lower() == "memory" and isinstance(data, dict):
+                # For memory, the data is structured as {"mem": {...}, "swap": {...}}
+                # We need to flatten this structure properly
+                flattened_data = flatten_dict(data, sep='_')
+                set_resource_metrics(flattened_data, resource_type, None)
             # Handle multiple entities (e.g., multiple CPUs or GPUs)
-            if isinstance(data, list):
+            elif isinstance(data, list):
                 # Flatten each entity in the list and add entity index as a tag
                 for i, entity_data in enumerate(data):
                     flattened_data = flatten_dict(entity_data, sep='_')
@@ -274,6 +280,7 @@ def set_resource_metrics(flattened_data, resource_type, entity_index=None):
                 gauge_key = f"{metric_name}_{'_'.join(f'{k}_{v}' for k, v in labels.items())}" if labels else metric_name
                 if gauge_key not in gauges:
                     try:
+                        # Only pass label names if there are labels
                         if labels:
                             gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}", list(labels.keys()))
                         else:
@@ -286,7 +293,11 @@ def set_resource_metrics(flattened_data, resource_type, entity_index=None):
                 # Set the gauge value with labels if provided
                 if gauge_key in gauges and gauges[gauge_key]:
                     try:
-                        gauges[gauge_key].labels(**labels).set(value)
+                        # Only use labels if there are labels
+                        if labels:
+                            gauges[gauge_key].labels(**labels).set(value)
+                        else:
+                            gauges[gauge_key].set(value)
                     except Exception as e:
                         logger.warning(f"Failed to set gauge {metric_name}: {e}")
             else:
