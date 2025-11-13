@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "prometheus-client>=0.20.0",
-    "fnos>=0.7.0",
+    "fnos>=0.8.1",
 ]
 
 [project.scripts]
@@ -22,5 +22,6 @@ Repository = "https://github.com/Timandes/fnos-prometheus-exporter"
 [tool.uv]
 dev-dependencies = [
     "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
     "twine>=4.0.0",
 ]

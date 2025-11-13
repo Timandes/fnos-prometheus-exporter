@@ -41,21 +41,21 @@ def test_simple_case():
     # Check if we have any output
     if not metrics_output:
         print("ERROR: No metrics generated!")
-        return False
+        assert False, "No metrics generated!"
     
     # Look for the expected metric
     expected_metric = 'fnos_cpu_cpu_temp{core="0",cpu_name="AMD Ryzen 7 5800H with Radeon Graphics"} 35.0'
     
     if expected_metric in metrics_output:
         print("SUCCESS: Found expected metric!")
-        return True
+        assert True
     else:
         print(f"ERROR: Expected metric '{expected_metric}' not found")
         # Show all metrics that contain 'temp'
         for line in metrics_output.split('\n'):
             if 'temp' in line:
                 print(f"Found temp metric: {line}")
-        return False
+        assert False, f"Expected metric '{expected_metric}' not found"
 
 if __name__ == "__main__":
     success = test_simple_case()

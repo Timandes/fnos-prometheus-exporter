@@ -85,6 +85,7 @@ client_instance = None
 system_info_instance = None
 resource_monitor_instance = None
 store_instance = None
+network_instance = None
 gauges = {}  # Dictionary to store gauge instances
 infos = {}   # Dictionary to store info instances
 
@@ -601,6 +602,121 @@ def set_disk_performance_metrics(flattened_data, entity_index=None):
                     logger.warning(f"Failed to set info {metric_name}: {e}")
 
 
+async def collect_network_metrics(network_instance, resource_monitor_instance):
+    """Collect network metrics from Network and ResourceMonitor"""
+    global gauges, infos
+
+    try:
+        # Get network interface data from Network.list()
+        list_response = await network_instance.list(type=0, timeout=10.0)
+        logger.debug(f"Network list response: {list_response}")
+
+        # Get network performance data from ResourceMonitor.net()
+        resmon_response = await resource_monitor_instance.net(timeout=10.0)
+        logger.debug(f"ResourceMonitor network response: {resmon_response}")
+
+        # Process the network list response data
+        if list_response and isinstance(list_response, dict) and "data" in list_response and "net" in list_response["data"]:
+            net_data = list_response["data"]["net"]
+            if "ifs" in net_data and isinstance(net_data["ifs"], list):
+                for entity_data in net_data["ifs"]:
+                    # Flatten the entity data
+                    flattened_data = flatten_dict(entity_data, sep='_')
+                    # Set metrics with interface name as tag
+                    set_network_metrics(flattened_data, "list")
+
+        # Process the ResourceMonitor network response data
+        if resmon_response and isinstance(resmon_response, dict) and "data" in resmon_response:
+            resmon_data = resmon_response["data"]
+            if "ifs" in resmon_data and isinstance(resmon_data["ifs"], list):
+                for entity_data in resmon_data["ifs"]:
+                    # Flatten the entity data
+                    flattened_data = flatten_dict(entity_data, sep='_')
+                    # Set metrics with interface name as tag
+                    set_network_metrics(flattened_data, "resmon")
+
+        logger.info("Network metrics collected successfully from fnOS system")
+        return True
+    except Exception as e:
+        logger.error(f"Error collecting network metrics: {e}")
+        return False
+
+
+def set_network_metrics(flattened_data, source):
+    """Set network metrics with interface name as tags"""
+    global gauges, infos
+
+    # Extract interface name from the flattened data if available
+    interface_name = None
+    if 'name' in flattened_data:
+        interface_name = flattened_data['name']
+    elif 'if_name' in flattened_data:
+        interface_name = flattened_data['if_name']
+
+    # Process each flattened key-value pair
+    for key, value in flattened_data.items():
+        # Create a metric name with the prefix, source, and flattened key
+        metric_name = f"fnos_network_{source}_{key}"
+
+        # Convert metric name to snake_case
+        metric_name = camel_to_snake(metric_name)
+
+        # Create labels dictionary for interface name if available
+        labels = {}
+        if interface_name is not None:
+            labels['interface_name'] = str(interface_name)
+
+        # Check if value is numeric or string
+        if isinstance(value, (int, float)):
+            # Try to get existing gauge or create new one
+            gauge_key = f"{metric_name}_{interface_name}" if interface_name is not None else metric_name
+            if gauge_key not in gauges:
+                try:
+                    if labels:
+                        gauges[gauge_key] = Gauge(metric_name, f"fnOS network {source} metric for {key}", list(labels.keys()))
+                    else:
+                        gauges[gauge_key] = Gauge(metric_name, f"fnOS network {source} metric for {key}")
+                except ValueError:
+                    # Gauge might already exist in registry, try to get it
+                    from prometheus_client import REGISTRY
+                    gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+
+            # Set the gauge value with labels if provided
+            if gauge_key in gauges and gauges[gauge_key]:
+                try:
+                    if labels:
+                        gauges[gauge_key].labels(**labels).set(value)
+                    else:
+                        gauges[gauge_key].set(value)
+                except Exception as e:
+                    logger.warning(f"Failed to set gauge {metric_name}: {e}")
+        else:
+            # For string values, use Info metric
+            info_key = camel_to_snake(key)
+
+            # Try to get existing info or create new one
+            if metric_name not in infos:
+                try:
+                    if labels:
+                        infos[metric_name] = Info(metric_name, f"fnOS network {source} info for {key}", list(labels.keys()))
+                    else:
+                        infos[metric_name] = Info(metric_name, f"fnOS network {source} info for {key}")
+                except ValueError:
+                    # Info might already exist in registry, try to get it
+                    from prometheus_client import REGISTRY
+                    infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+
+            # Set the info value with labels if provided
+            if metric_name in infos and infos[metric_name]:
+                try:
+                    if labels:
+                        infos[metric_name].labels(**labels).info({info_key: str(value)})
+                    else:
+                        infos[metric_name].info({info_key: str(value)})
+                except Exception as e:
+                    logger.warning(f"Failed to set info {metric_name}: {e}")
+
+
 def set_disk_metrics(flattened_data, entity_index=None):
     """Set disk metrics with disk name as tags"""
     global gauges, infos
@@ -768,7 +884,7 @@ async def async_collect_metrics(host, user, password):
     global client_instance, system_info_instance, resource_monitor_instance
 
     try:
-        from fnos import FnosClient, SystemInfo, ResourceMonitor, Store
+        from fnos import FnosClient, SystemInfo, ResourceMonitor, Store, Network
 
         # Check if we need to create a new client (either first run or connection lost)
         if client_instance is None or not client_instance.connected:
@@ -797,6 +913,8 @@ async def async_collect_metrics(host, user, password):
                 resource_monitor_instance = ResourceMonitor(client_instance)
                 # Create Store instance after successful login
                 store_instance = Store(client_instance)
+                # Create Network instance after successful login
+                network_instance = Network(client_instance)
             else:
                 logger.error(f"Failed to login to fnOS system: {login_response}")
                 return False
@@ -981,6 +1099,16 @@ async def async_collect_metrics(host, user, password):
             else:
                 logger.warning("Store instance not available, skipping store and disk metrics collection")
 
+            # Get network data
+            if network_instance:
+                try:
+                    # Collect network interface data
+                    await collect_network_metrics(network_instance, resource_monitor_instance)
+                except Exception as e:
+                    logger.error(f"Error collecting network metrics: {e}")
+            else:
+                logger.warning("Network instance not available, skipping network metrics collection")
+
             return True
         else:
             logger.error("SystemInfo instance not available")
@@ -996,12 +1124,13 @@ async def async_collect_metrics(host, user, password):
         system_info_instance = None
         resource_monitor_instance = None
         store_instance = None
+        network_instance = None
         return True  # Return True to continue the metrics collection loop instead of stopping it
 
 
 def collect_metrics(host, user, password):
     """Collect metrics from fnOS system"""
-    global client_instance, system_info_instance, resource_monitor_instance, store_instance  # Move global declarations to the top of function
+    global client_instance, system_info_instance, resource_monitor_instance, store_instance, network_instance  # Move global declarations to the top of function
 
     # Run the async function in a separate thread with its own event loop
     with ThreadPoolExecutor() as executor:
@@ -1015,6 +1144,7 @@ def collect_metrics(host, user, password):
             system_info_instance = None
             resource_monitor_instance = None
             store_instance = None
+            network_instance = None
             # Return True instead of False to prevent the metrics collection loop from stopping
             # This allows the service to continue running even if one collection fails
             return True
