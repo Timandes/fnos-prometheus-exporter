@@ -151,11 +151,11 @@ class TestNetworkMetrics:
 
         # Verify that gauges were created and set
         from main import gauges
-        assert "fnos_network_list_index_bond1" in gauges
-        assert "fnos_network_list_if_type_bond1" in gauges
-        assert "fnos_network_list_enable_bond1" in gauges
-        assert "fnos_network_list_running_bond1" in gauges
-        assert "fnos_network_list_speed_bond1" in gauges
+        assert "fnos_network_index_bond1" in gauges
+        assert "fnos_network_if_type_bond1" in gauges
+        assert "fnos_network_enable_bond1" in gauges
+        assert "fnos_network_running_bond1" in gauges
+        assert "fnos_network_speed_bond1" in gauges
 
         # Verify that info metrics were created for string values
         from main import infos
@@ -177,10 +177,10 @@ class TestNetworkMetrics:
 
         # Verify that gauges were created and set
         from main import gauges
-        assert "fnos_network_resmon_index_bond1" in gauges
-        assert "fnos_network_resmon_if_type_bond1" in gauges
-        assert "fnos_network_resmon_receive_bond1" in gauges
-        assert "fnos_network_resmon_transmit_bond1" in gauges
+        assert "fnos_network_index_bond1" in gauges
+        assert "fnos_network_if_type_bond1" in gauges
+        assert "fnos_network_receive_bond1" in gauges
+        assert "fnos_network_transmit_bond1" in gauges
 
         # Verify that info metrics were created for string values
         from main import infos
@@ -200,10 +200,10 @@ class TestNetworkMetrics:
 
         # Verify that info metrics were created for string values
         from main import infos
-        assert "fnos_network_list_ipv4_mode" in infos
-        assert "fnos_network_list_hw_addr" in infos
+        assert "fnos_network_ipv4_mode" in infos
+        assert "fnos_network_hw_addr" in infos
 
         # Verify that no gauges were created for string values
         from main import gauges
-        assert "fnos_network_list_ipv4_mode_bond1" not in gauges
-        assert "fnos_network_list_hw_addr_bond1" not in gauges
+        assert "fnos_network_ipv4_mode_bond1" not in gauges
+        assert "fnos_network_hw_addr_bond1" not in gauges

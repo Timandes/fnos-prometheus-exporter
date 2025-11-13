@@ -224,23 +224,23 @@ uvx fnos-exporter --user your-username --password your-password
 | fnos_store_block_arr_device_status | Info | Store.general() | 关联阵列设备的状态 |
 
 ### fnos_network_* 指标详情
-这些指标来源于fnOS的`Network.list()`和`ResourceMonitor.network()` API端点，用于获取网络接口的配置和性能信息。
+这些指标来源于fnOS的`Network.list()`和`ResourceMonitor.net()` API端点，用于获取网络接口的配置和性能信息。
 
-`Network.list()` API提供网络接口的配置信息（如名称、类型、速度、IP地址等），而`ResourceMonitor.network()` API提供网络接口的性能信息（如接收和传输的数据量）。
+`Network.list()` API提供网络接口的配置信息（如名称、类型、速度、IP地址等），而`ResourceMonitor.net()` API提供网络接口的性能信息（如接收和传输的数据量）。
 
-所有`fnos_network_list_*`指标（来自Network.list()）和`fnos_network_resmon_*`指标（来自ResourceMonitor.network()）都使用`interface_name`标签来区分不同的网络接口（如"bond1"、"eth0"等）。
+所有网络指标都使用`interface_name`标签来区分不同的网络接口（如"bond1"、"eth0"等）。
 
 | 指标名称 | 类型 | 来源API | 描述 |
 |-------------|------|---------|-------------|
-| fnos_network_list_name | Info | Network.list() | 网络接口的名称 |
-| fnos_network_list_speed | Gauge | Network.list() | 网络接口的速度（Mbps） |
-| fnos_network_list_mtu | Gauge | Network.list() | 网络接口的最大传输单元 |
-| fnos_network_list_running | Gauge | Network.list() | 网络接口是否运行（0=否，1=是） |
-| fnos_network_list_enable | Gauge | Network.list() | 网络接口是否启用（0=否，1=是） |
-| fnos_network_list_hw_addr | Info | Network.list() | 网络接口的硬件地址（MAC地址） |
-| fnos_network_resmon_receive | Gauge | ResourceMonitor.network() | 网络接口接收的数据量 |
-| fnos_network_resmon_transmit | Gauge | ResourceMonitor.network() | 网络接口传输的数据量 |
-| fnos_network_resmon_bond | Gauge | ResourceMonitor.network() | 网络接口是否为bond接口（0=否，1=是） |
+| fnos_network_name | Info | Network.list() | 网络接口的名称 |
+| fnos_network_speed | Gauge | Network.list() | 网络接口的速度（Mbps） |
+| fnos_network_mtu | Gauge | Network.list() | 网络接口的最大传输单元 |
+| fnos_network_running | Gauge | Network.list() | 网络接口是否运行（0=否，1=是） |
+| fnos_network_enable | Gauge | Network.list() | 网络接口是否启用（0=否，1=是） |
+| fnos_network_hw_addr | Info | Network.list() | 网络接口的硬件地址（MAC地址） |
+| fnos_network_receive | Gauge | ResourceMonitor.net() | 网络接口接收的数据量 |
+| fnos_network_transmit | Gauge | ResourceMonitor.net() | 网络接口传输的数据量 |
+| fnos_network_bond | Gauge | ResourceMonitor.net() | 网络接口是否为bond接口（0=否，1=是） |
 
 ## 命令行参数
 

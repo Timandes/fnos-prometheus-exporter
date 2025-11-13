@@ -655,8 +655,8 @@ def set_network_metrics(flattened_data, source):
 
     # Process each flattened key-value pair
     for key, value in flattened_data.items():
-        # Create a metric name with the prefix, source, and flattened key
-        metric_name = f"fnos_network_{source}_{key}"
+        # Create a metric name with the prefix and flattened key (removing source prefix)
+        metric_name = f"fnos_network_{key}"
 
         # Convert metric name to snake_case
         metric_name = camel_to_snake(metric_name)
@@ -673,9 +673,9 @@ def set_network_metrics(flattened_data, source):
             if gauge_key not in gauges:
                 try:
                     if labels:
-                        gauges[gauge_key] = Gauge(metric_name, f"fnOS network {source} metric for {key}", list(labels.keys()))
+                        gauges[gauge_key] = Gauge(metric_name, f"fnOS network metric for {key}", list(labels.keys()))
                     else:
-                        gauges[gauge_key] = Gauge(metric_name, f"fnOS network {source} metric for {key}")
+                        gauges[gauge_key] = Gauge(metric_name, f"fnOS network metric for {key}")
                 except ValueError:
                     # Gauge might already exist in registry, try to get it
                     from prometheus_client import REGISTRY
@@ -698,9 +698,9 @@ def set_network_metrics(flattened_data, source):
             if metric_name not in infos:
                 try:
                     if labels:
-                        infos[metric_name] = Info(metric_name, f"fnOS network {source} info for {key}", list(labels.keys()))
+                        infos[metric_name] = Info(metric_name, f"fnOS network info for {key}", list(labels.keys()))
                     else:
-                        infos[metric_name] = Info(metric_name, f"fnOS network {source} info for {key}")
+                        infos[metric_name] = Info(metric_name, f"fnOS network info for {key}")
                 except ValueError:
                     # Info might already exist in registry, try to get it
                     from prometheus_client import REGISTRY
