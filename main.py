@@ -1120,29 +1120,7 @@ async def async_collect_metrics(host, user, password):
         return True  # Return True to continue the metrics collection loop instead of stopping it
 
 
-def collect_metrics(host, user, password):
-    """Collect metrics from fnOS system"""
-    global client_instance, system_info_instance, resource_monitor_instance, store_instance, network_instance
 
-    # Run the async function in the main thread with asyncio
-    try:
-        # Create a new event loop for this execution
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(async_collect_metrics(host, user, password))
-        loop.close()
-        return result
-    except Exception as e:
-        logger.error(f"Error in collect_metrics: {e}")
-        # Reset client instance on error so we can reconnect on next attempt
-        client_instance = None
-        system_info_instance = None
-        resource_monitor_instance = None
-        store_instance = None
-        network_instance = None
-        # Return True instead of False to prevent the metrics collection loop from stopping
-        # This allows the service to continue running even if one collection fails
-        return True
 
 
 def main():
