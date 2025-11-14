@@ -1168,6 +1168,8 @@ def main():
 
     parser.add_argument('--port', type=int, default=9100, help='Port to expose Prometheus metrics (default: 9100)')
 
+    parser.add_argument('--interval', type=int, default=5, help='Interval in seconds between metric collections (default: 5)')
+
     parser.add_argument('--log-level', type=str, default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='Set the logging level (default: INFO)')
 
     args = parser.parse_args()
@@ -1321,9 +1323,9 @@ label {
 
                 collect_metrics(args.host, args.user, args.password)
 
-                # Sleep for 30 seconds but check running status every second
+                # Sleep for specified interval but check running status every second
 
-                for _ in range(30):
+                for _ in range(args.interval):
 
                     if not running:
 

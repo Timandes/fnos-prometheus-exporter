@@ -248,6 +248,7 @@ uvx fnos-exporter --user your-username --password your-password
 - `--user`: 连接到 fnOS 系统的用户名（必填）
 - `--password`: 连接到 fnOS 系统的密码（必填）
 - `--port`: 暴露 Prometheus 指标的端口（默认值：9100）
+- `--interval`: 指标收集间隔（秒）（默认值：5）
 - `--log-level`: 设置日志级别（可选：DEBUG, INFO, WARNING, ERROR, CRITICAL，默认值：INFO）
 
 ## 开发
