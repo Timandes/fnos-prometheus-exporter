@@ -1205,93 +1205,16 @@ def main():
 
         elif environ['PATH_INFO'] == '/':
 
-            # Serve custom home page with link to metrics
-
-            html_content = '''<html lang="en">
-
-  <head>
-
-    <meta charset="UTF-8">
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>fnOS Exporter</title>
-
-    <style>body {
-
-  font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,Noto Sans,Liberation Sans,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;
-
-  margin: 0;
-
-}
-
-header {
-
-  background-color: #e6522c;
-
-  color: #fff;
-
-  font-size: 1rem;
-
-  padding: 1rem;
-
-}
-
-main {
-
-  padding: 1rem;
-
-}
-
-label {
-
-  display: inline-block;
-
-  width: 0.5em;
-
-}
-
-#pprof {
-
-  border: black 2px solid;
-
-  padding: 1rem;
-
-  width: fit-content;
-
-}
-
-
-
-</style>
-
-  </head>
-
-  <body>
-
-    <header>
-
-      <h1>fnOS Exporter</h1>
-
-    </header>
-
-    <main>
-
-      <h2>fnOS Prometheus Exporter</h2>
-
-      <div><a href="/metrics">Metrics</a></div>
-
-      <p>Visit <a href="/metrics">/metrics</a> for Prometheus metrics.</p>
-
-    </main>
-
-  </body>
-
-</html>'''
-
-            start_response('200 OK', [('Content-Type', 'text/html')])
-
-            return [html_content.encode('utf-8')]
+            # Serve custom home page with link to metrics by reading index.html file
+            try:
+                with open('index.html', 'r', encoding='utf-8') as file:
+                    html_content = file.read()
+                start_response('200 OK', [('Content-Type', 'text/html')])
+                return [html_content.encode('utf-8')]
+            except FileNotFoundError:
+                # Return 404 if index.html is not found
+                start_response('404 Not Found', [('Content-Type', 'text/plain')])
+                return [b'404: index.html not found']
 
         else:
 
