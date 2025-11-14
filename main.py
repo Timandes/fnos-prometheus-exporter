@@ -211,7 +211,7 @@ def set_resource_metrics(flattened_data, resource_type, entity_index=None):
                         temp_labels = labels.copy()
                         # Add core label for each temperature in the list
                         temp_labels['core'] = str(i)
-                        
+
                         # Try to get existing gauge or create new one
                         gauge_key = f"{temp_metric_name}_{'_'.join(f'{k}_{v}' for k, v in temp_labels.items())}" if temp_labels else temp_metric_name
                         if gauge_key not in gauges:
@@ -499,12 +499,12 @@ async def collect_disk_performance_metrics(resource_monitor_instance):
         if response and isinstance(response, dict) and "data" in response and isinstance(response["data"], dict):
             # Get the disk data from the response
             disk_data = response["data"]
-            
+
             # Check if disk data exists and is a list
             if "disk" in disk_data and isinstance(disk_data["disk"], list):
                 disk_list = disk_data["disk"]
                 logger.debug(f"Processing {len(disk_list)} disk performance entities")
-                
+
                 # Process each disk entity
                 for entity_data in disk_list:
                     logger.debug(f"Processing disk performance entity: {entity_data}")
@@ -727,7 +727,7 @@ def set_disk_metrics(flattened_data, entity_index=None):
         disk_name = flattened_data['name']
     elif 'disk_name' in flattened_data:
         disk_name = flattened_data['disk_name']
-    
+
     # Process each flattened key-value pair
     for key, value in flattened_data.items():
         # Create a metric name with the prefix and flattened key
@@ -824,7 +824,7 @@ def set_store_metrics(flattened_data, entity_index=None, entity_type=None):
                 labels['entity'] = str(entity_index)
         elif entity_index is not None:
             labels['entity'] = str(entity_index)
-            
+
         if entity_type:
             labels['type'] = entity_type
 
@@ -891,11 +891,13 @@ async def async_collect_metrics(host, user, password):
             # Close existing client if it exists
             if client_instance is not None:
                 try:
+                    logger.info("Closing existing client...")
                     await client_instance.close()
                 except:
                     pass  # Ignore errors when closing
 
             # Create new client instance
+            logger.info("Creating new client instance...")
             client_instance = FnosClient()
             logger.info(f"Attempting to connect to fnOS system at {host}")
 
@@ -1053,19 +1055,19 @@ async def async_collect_metrics(host, user, password):
                     await collect_resource_metrics(resource_monitor_instance, "cpu", "CPU")
                 except Exception as e:
                     logger.error(f"Error collecting CPU metrics: {e}")
-                
+
                 try:
                     # Collect GPU data
                     await collect_resource_metrics(resource_monitor_instance, "gpu", "GPU")
                 except Exception as e:
                     logger.error(f"Error collecting GPU metrics: {e}")
-                
+
                 try:
                     # Collect memory data
                     await collect_resource_metrics(resource_monitor_instance, "memory", "Memory")
                 except Exception as e:
                     logger.error(f"Error collecting memory metrics: {e}")
-                
+
                 try:
                     # Collect disk performance data
                     await collect_disk_performance_metrics(resource_monitor_instance)
@@ -1085,7 +1087,7 @@ async def async_collect_metrics(host, user, password):
                 except Exception as e:
                     logger.error(f"Error collecting store metrics: {e}")
                     # Continue with other metrics collection even if store metrics fail
-                    
+
                 # Get disk data
                 try:
                     disk_success = await collect_disk_metrics(store_instance)
@@ -1243,17 +1245,19 @@ def main():
         while running:
 
             try:
-
+                logger.info("Starting metrics collection...")
                 collect_metrics(args.host, args.user, args.password)
+                logger.info("Metrics collection complete. Next collection in {} seconds".format(args.interval))
 
                 # Sleep for specified interval but check running status every second
 
                 for _ in range(args.interval):
 
                     if not running:
-
+                        logger.info("Received interrupt signal, shutting down...")
                         break
 
+                    logger.debug("Sleeping for 1 second")
                     time.sleep(1)
 
             except Exception as e:
