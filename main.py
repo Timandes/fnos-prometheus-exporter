@@ -55,7 +55,7 @@ import re
 
 import argparse
 
-from concurrent.futures import ThreadPoolExecutor
+import asyncio
 
 from prometheus_client import Gauge, Info
 
@@ -118,17 +118,7 @@ def flatten_dict(d, parent_key='', sep='_'):
             items.append((new_key, v))
     return dict(items)
 
-def run_async_in_thread(coro):
-    """Helper function to run async code in a separate thread"""
-    import asyncio
 
-    # Create a new event loop for this thread
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
 async def collect_resource_metrics(resource_monitor, method_name, resource_type):
@@ -1132,24 +1122,27 @@ async def async_collect_metrics(host, user, password):
 
 def collect_metrics(host, user, password):
     """Collect metrics from fnOS system"""
-    global client_instance, system_info_instance, resource_monitor_instance, store_instance, network_instance  # Move global declarations to the top of function
+    global client_instance, system_info_instance, resource_monitor_instance, store_instance, network_instance
 
-    # Run the async function in a separate thread with its own event loop
-    with ThreadPoolExecutor() as executor:
-        future = executor.submit(run_async_in_thread, async_collect_metrics(host, user, password))
-        try:
-            return future.result(timeout=30)  # Wait for up to 30 seconds
-        except Exception as e:
-            logger.error(f"Error in collect_metrics: {e}")
-            # Reset client instance on error so we can reconnect on next attempt
-            client_instance = None
-            system_info_instance = None
-            resource_monitor_instance = None
-            store_instance = None
-            network_instance = None
-            # Return True instead of False to prevent the metrics collection loop from stopping
-            # This allows the service to continue running even if one collection fails
-            return True
+    # Run the async function in the main thread with asyncio
+    try:
+        # Create a new event loop for this execution
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(async_collect_metrics(host, user, password))
+        loop.close()
+        return result
+    except Exception as e:
+        logger.error(f"Error in collect_metrics: {e}")
+        # Reset client instance on error so we can reconnect on next attempt
+        client_instance = None
+        system_info_instance = None
+        resource_monitor_instance = None
+        store_instance = None
+        network_instance = None
+        # Return True instead of False to prevent the metrics collection loop from stopping
+        # This allows the service to continue running even if one collection fails
+        return True
 
 
 def main():
@@ -1238,57 +1231,53 @@ def main():
 
 
 
-    # Start metrics collection in a separate thread
+    # Start metrics collection in the main thread using asyncio
 
     def metrics_collection_loop():
+        # Run the async collection in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        async def async_metrics_collection():
+            while running:
+                try:
+                    logger.info("Starting metrics collection...")
+                    await async_collect_metrics(args.host, args.user, args.password)
+                    logger.info("Metrics collection complete. Next collection in {} seconds".format(args.interval))
 
-        while running:
+                    # Sleep for specified interval but check running status
+                    for _ in range(args.interval):
+                        if not running:
+                            logger.info("Received interrupt signal, shutting down...")
+                            return
+                        await asyncio.sleep(1)  # Use asyncio.sleep for async context
 
-            try:
-                logger.info("Starting metrics collection...")
-                collect_metrics(args.host, args.user, args.password)
-                logger.info("Metrics collection complete. Next collection in {} seconds".format(args.interval))
+                except Exception as e:
+                    logger.error(f"Error in metrics collection loop: {e}")
+                    # Continue running even if there's an error
+                    await asyncio.sleep(1)
 
-                # Sleep for specified interval but check running status every second
-
-                for _ in range(args.interval):
-
-                    if not running:
-                        logger.info("Received interrupt signal, shutting down...")
-                        break
-
-                    logger.debug("Sleeping for 1 second")
-                    time.sleep(1)
-
-            except Exception as e:
-
-                logger.error(f"Error in metrics collection loop: {e}")
-
-                # Continue running even if there's an error
-
-                time.sleep(1)
-
-
-
-    # Start the metrics collection thread
-
-    metrics_thread = threading.Thread(target=metrics_collection_loop, daemon=True)
-
-    metrics_thread.start()
+        loop.run_until_complete(async_metrics_collection())
+        loop.close()
 
 
 
-    # Serve requests
+    # Start metrics collection in the main thread and run HTTP server in a separate thread
 
-    try:
+    def serve_http():
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            logger.info("Received interrupt signal, shutting down...")
+            global running
+            running = False
 
-        httpd.serve_forever()
+    # Start HTTP server in a separate thread
+    http_thread = threading.Thread(target=serve_http, daemon=True)
+    http_thread.start()
 
-    except KeyboardInterrupt:
-
-        logger.info("Received interrupt signal, shutting down...")
-
-        running = False
+    # Run metrics collection in the main thread
+    metrics_collection_loop()
 
 
 
