@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="fnos-exporter",
-    version="0.2.0",
+    version="0.3.0",
     packages=find_packages(),
     py_modules=['main'],
     install_requires=[
@@ -14,8 +14,8 @@ setup(
             'fnos-exporter=main:main',
         ],
     },
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Timandes White",
+    author_email="timandes@gmail.com",
     description="Prometheus Exporter for fnOS",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
