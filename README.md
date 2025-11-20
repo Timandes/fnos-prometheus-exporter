@@ -5,6 +5,8 @@
 
 fnOS Prometheus Exporter 是一个基于 Python 的导出器，用于将 fnOS 系统的指标暴露给 Prometheus。
 
+**重要提示：用于获取指标的用户必须是飞牛fnOS的系统管理员，否则将会出现无法获取磁盘等指标的问题。**
+
 ## 源代码
 
 - 源代码仓库: [https://github.com/Timandes/fnos-prometheus-exporter](https://github.com/Timandes/fnos-prometheus-exporter)
