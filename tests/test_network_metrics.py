@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 from unittest.mock import AsyncMock
-from main import collect_network_metrics, set_network_metrics
+from collector.network.network import collect_network_metrics, set_network_metrics
 
 
 class TestNetworkMetrics:
@@ -10,7 +10,7 @@ class TestNetworkMetrics:
     def setup_method(self):
         """Setup method to clear global state before each test"""
         # Clear the global gauges and infos dictionaries
-        from main import gauges, infos
+        from globals import gauges, infos
         gauges.clear()
         infos.clear()
 
@@ -150,7 +150,7 @@ class TestNetworkMetrics:
         set_network_metrics(flattened_data, "list")
 
         # Verify that gauges were created and set
-        from main import gauges
+        from globals import gauges
         assert "fnos_network_index_bond1" in gauges
         assert "fnos_network_if_type_bond1" in gauges
         assert "fnos_network_enable_bond1" in gauges
@@ -158,7 +158,7 @@ class TestNetworkMetrics:
         assert "fnos_network_speed_bond1" in gauges
 
         # Verify that info metrics were created for string values
-        from main import infos
+        from globals import infos
         # No string values in this test data, so no info metrics should be created
 
     def test_set_network_metrics_resmon_source(self):
@@ -176,14 +176,14 @@ class TestNetworkMetrics:
         set_network_metrics(flattened_data, "resmon")
 
         # Verify that gauges were created and set
-        from main import gauges
+        from globals import gauges
         assert "fnos_network_index_bond1" in gauges
         assert "fnos_network_if_type_bond1" in gauges
         assert "fnos_network_receive_bond1" in gauges
         assert "fnos_network_transmit_bond1" in gauges
 
         # Verify that info metrics were created for string values
-        from main import infos
+        from globals import infos
         # No string values in this test data, so no info metrics should be created
 
     def test_set_network_metrics_with_string_values(self):
@@ -199,11 +199,11 @@ class TestNetworkMetrics:
         set_network_metrics(flattened_data, "list")
 
         # Verify that info metrics were created for string values
-        from main import infos
+        from globals import infos
         assert "fnos_network_ipv4_mode" in infos
         assert "fnos_network_hw_addr" in infos
 
         # Verify that no gauges were created for string values
-        from main import gauges
+        from globals import gauges
         assert "fnos_network_ipv4_mode_bond1" not in gauges
         assert "fnos_network_hw_addr_bond1" not in gauges

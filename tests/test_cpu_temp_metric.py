@@ -6,7 +6,8 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Import after setting up path so globals are initialized
-from main import collect_resource_metrics, set_resource_metrics, flatten_dict
+from collector.resource import collect_resource_metrics, set_resource_metrics
+from utils.common import flatten_dict
 from prometheus_client import generate_latest, REGISTRY
 import logging
 
@@ -14,7 +15,8 @@ import logging
 logging.getLogger().setLevel(logging.ERROR)
 
 def clear_metrics_registry():
-    """Clear all metrics from the registry"""
+    """Clear all metrics from the registry and reset global dictionaries"""
+    from prometheus_client import REGISTRY
     collectors = list(REGISTRY._collector_to_names.keys())
     for collector in collectors:
         try:
@@ -24,6 +26,11 @@ def clear_metrics_registry():
         except Exception:
             # Some collectors can't be unregistered if they're in use
             pass
+    
+    # Also clear our global dictionaries
+    from globals import gauges, infos
+    gauges.clear()
+    infos.clear()
 
 
 @pytest.mark.asyncio
@@ -37,7 +44,7 @@ async def test_fnos_cpu_cpu_temp_metric_with_mock():
     clear_metrics_registry()
     
     # Import the globals to make sure they are initialized
-    from main import gauges, infos
+    from globals import gauges, infos
     # Reset global variables to clean state
     gauges.clear()
     infos.clear()
@@ -105,7 +112,7 @@ def test_cpu_temp_with_single_value():
     clear_metrics_registry()
     
     # Import the globals to make sure they are initialized
-    from main import gauges, infos
+    from globals import gauges, infos
     # Reset global variables to clean state
     gauges.clear()
     infos.clear()
@@ -137,7 +144,7 @@ def test_cpu_temp_with_multiple_values():
     clear_metrics_registry()
     
     # Import the globals to make sure they are initialized
-    from main import gauges, infos
+    from globals import gauges, infos
     # Reset global variables to clean state
     gauges.clear()
     infos.clear()

@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Import after setting path
-from main import camel_to_snake
+from utils.common import camel_to_snake
 
 # Import and initialize global variables
 import main
@@ -26,22 +26,19 @@ def collect_store_metrics(*args, **kwargs):
     return main.collect_store_metrics(*args, **kwargs)
 
 def clear_metrics_registry():
-    """Clear all metrics from the registry"""
+    """Clear all metrics from the registry and reset global dictionaries"""
     from prometheus_client import REGISTRY
-    # Also reset the global gauges and infos in main
-    import main
-    if hasattr(main, 'gauges'):
-        main.gauges = {}
-    if hasattr(main, 'infos'):
-        main.infos = {}
-    
-    # Unregister all collectors from the Prometheus registry
     collectors = list(REGISTRY._collector_to_names.keys())
     for collector in collectors:
         try:
             REGISTRY.unregister(collector)
         except KeyError:
             pass
+    
+    # Also clear our global dictionaries
+    from globals import gauges, infos
+    gauges.clear()
+    infos.clear()
 def test_set_store_metrics_with_fssize_frsize():
     """Test that set_store_metrics correctly processes fssize and frsize values"""
     clear_metrics_registry()
@@ -60,7 +57,8 @@ def test_set_store_metrics_with_fssize_frsize():
     set_store_metrics(flattened_data, entity_index='0', entity_type='array')
     
     # Import the gauges dictionary to verify metrics were created
-    from main import gauges
+    # We need to import gauges from main since it's a global variable defined there
+    from globals import gauges
     
     # Check if the metrics were created with correct names
     expected_fssize_name = "fnos_store_array_fssize"

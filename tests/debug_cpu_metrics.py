@@ -4,16 +4,23 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from main import set_resource_metrics, flatten_dict
+from collector.resource import set_resource_metrics
+from utils.common import flatten_dict
 
 def clear_metrics_registry():
-    """Clear all metrics from the registry"""
+    """Clear all metrics from the registry and reset global dictionaries"""
+    from prometheus_client import REGISTRY
     collectors = list(REGISTRY._collector_to_names.keys())
     for collector in collectors:
         try:
             REGISTRY.unregister(collector)
         except KeyError:
             pass
+    
+    # Also clear our global dictionaries
+    from globals import gauges, infos
+    gauges.clear()
+    infos.clear()
 
 def test_debug_output():
     """Debug test to see exactly what metrics are generated"""
