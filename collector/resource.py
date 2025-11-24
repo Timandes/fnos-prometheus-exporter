@@ -64,7 +64,30 @@ async def collect_resource_metrics(resource_monitor, method_name, resource_type)
                 # We need to flatten this structure properly
                 flattened_data = flatten_dict(data, sep='_')
                 set_resource_metrics(flattened_data, resource_type, None)
-            # Handle multiple entities (e.g., multiple CPUs or GPUs)
+            # Handle GPU data specially - it has 'num' and 'gpu' keys where 'gpu' contains the list
+            elif resource_type.lower() == "gpu" and isinstance(data, dict):
+                # For GPU data, the actual GPU entities are in the 'gpu' key
+                if 'gpu' in data and isinstance(data['gpu'], list):
+                    gpu_list = data['gpu']
+                    # Process each GPU entity in the list
+                    for i, entity_data in enumerate(gpu_list):
+                        if isinstance(entity_data, dict):
+                            flattened_data = flatten_dict(entity_data, sep='_')
+                            # Pass the index to set_resource_metrics, which will extract device_name from the data
+                            set_resource_metrics(flattened_data, resource_type, i)
+                    # Also set the GPU count as a separate metric
+                    if 'num' in data and isinstance(data['num'], (int, float)):
+                        # Create a gauge for the GPU count
+                        gpu_count_metric_name = f"fnos_{resource_type.lower()}_num"
+                        gpu_count_metric_name = camel_to_snake(gpu_count_metric_name)
+                        if gpu_count_metric_name not in gauges:
+                            gauges[gpu_count_metric_name] = Gauge(gpu_count_metric_name, f"fnOS {resource_type} count")
+                        gauges[gpu_count_metric_name].set(data['num'])
+                else:
+                    # Fallback to original behavior if data structure is unexpected
+                    flattened_data = flatten_dict(data, sep='_')
+                    set_resource_metrics(flattened_data, resource_type, None)
+            # Handle multiple entities (e.g., multiple CPUs)
             elif isinstance(data, list):
                 # Flatten each entity in the list and add entity index as a tag
                 for i, entity_data in enumerate(data):
@@ -95,149 +118,263 @@ def set_resource_metrics(flattened_data, resource_type, entity_index=None):
         elif 'cpu_name' in flattened_data:
             cpu_name = flattened_data['cpu_name']
 
-    # Process each flattened key-value pair
-    for key, value in flattened_data.items():
-        # Create a metric name with the prefix and flattened key
-        metric_name = f"fnos_{resource_type.lower()}_{key}"
-
-        # Convert metric name to snake_case
-        metric_name = camel_to_snake(metric_name)
-
-        # Create labels dictionary for entity index if provided
+    # Special handling for GPU metrics to decompose complex properties
+    if resource_type.lower() == "gpu":
+        # GPU data needs special handling to decompose complex properties
+        # Create labels dictionary - for GPU use device_name instead of gpu_index
         labels = {}
-        if cpu_name is not None:
-            # For CPU metrics, use cpu_name as label instead of entity
-            labels['cpu_name'] = str(cpu_name)
-        elif entity_index is not None:
-            labels['entity'] = str(entity_index)
-
-        # Special handling for CPU temperature metrics
-        if resource_type.lower() == "cpu" and "temp" in key.lower():
-            # If value is a list, handle each temperature individually
-            if isinstance(value, list):
-                # For each temperature in the list, create a separate metric
-                for i, temp_value in enumerate(value):
-                    if isinstance(temp_value, (int, float)):
-                        # Create a metric name for each temperature entry
-                        temp_metric_name = metric_name
-                        temp_labels = labels.copy()
-                        # Add core label for each temperature in the list
-                        temp_labels['core'] = str(i)
-
+        if entity_index is not None:
+            # Extract device name from the flattened data if available, otherwise use a generic name
+            if 'device' in flattened_data:
+                labels['device_name'] = str(flattened_data['device'])
+            else:
+                labels['device_name'] = f"gpu_{entity_index}"
+        
+        # Process GPU data by separating numeric and string metrics
+        for key, value in flattened_data.items():
+            # Create a metric name with the prefix and flattened key
+            metric_name = f"fnos_{resource_type.lower()}_{key}"
+            
+            # Convert metric name to snake_case
+            metric_name = camel_to_snake(metric_name)
+            
+            # Handle nested GPU properties by flattening them appropriately
+            if isinstance(value, dict):
+                # For nested dictionaries like 'ram' and 'engine', flatten each key
+                for sub_key, sub_value in value.items():
+                    sub_metric_name = f"fnos_{resource_type.lower()}_{key}_{sub_key}"
+                    sub_metric_name = camel_to_snake(sub_metric_name)
+                    
+                    if isinstance(sub_value, (int, float)):
                         # Try to get existing gauge or create new one
-                        gauge_key = f"{temp_metric_name}_{'_'.join(f'{k}_{v}' for k, v in temp_labels.items())}" if temp_labels else temp_metric_name
+                        gauge_key = f"{sub_metric_name}_{'_'.join(f'{k}_{v}' for k, v in labels.items())}" if labels else sub_metric_name
                         if gauge_key not in gauges:
                             try:
-                                if temp_labels:
-                                    gauges[gauge_key] = Gauge(temp_metric_name, f"fnOS {resource_type} metric for {key}", list(temp_labels.keys()))
+                                if labels:
+                                    gauges[gauge_key] = Gauge(sub_metric_name, f"fnOS {resource_type} metric for {key}_{sub_key}", list(labels.keys()))
                                 else:
-                                    gauges[gauge_key] = Gauge(temp_metric_name, f"fnOS {resource_type} metric for {key}")
+                                    gauges[gauge_key] = Gauge(sub_metric_name, f"fnOS {resource_type} metric for {key}_{sub_key}")
                             except ValueError:
                                 # Gauge might already exist in registry, try to get it
                                 from prometheus_client import REGISTRY
-                                gauges[gauge_key] = REGISTRY._names_to_collectors.get(temp_metric_name)
-
+                                gauges[gauge_key] = REGISTRY._names_to_collectors.get(sub_metric_name)
+                        
                         # Set the gauge value with labels if provided
                         if gauge_key in gauges and gauges[gauge_key]:
                             try:
-                                gauges[gauge_key].labels(**temp_labels).set(temp_value)
+                                gauges[gauge_key].labels(**labels).set(sub_value)
                             except Exception as e:
-                                logger.warning(f"Failed to set gauge {temp_metric_name}: {e}")
-            elif isinstance(value, (int, float)):
-                # For single numeric temperature value, use it directly as the metric value
-                # Try to get existing gauge or create new one
-                gauge_key = f"{metric_name}_{'_'.join(f'{k}_{v}' for k, v in labels.items())}" if labels else metric_name
-                if gauge_key not in gauges:
-                    try:
-                        if labels:
-                            gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}", list(labels.keys()))
-                        else:
-                            gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}")
-                    except ValueError:
-                        # Gauge might already exist in registry, try to get it
-                        from prometheus_client import REGISTRY
-                        gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
-
-                # Set the gauge value with labels if provided
-                if gauge_key in gauges and gauges[gauge_key]:
-                    try:
-                        gauges[gauge_key].labels(**labels).set(value)
-                    except Exception as e:
-                        logger.warning(f"Failed to set gauge {metric_name}: {e}")
+                                logger.warning(f"Failed to set gauge {sub_metric_name}: {e}")
+                    else:
+                        # For string values in nested dict, use Info metric
+                        info_key = camel_to_snake(sub_key)
+                        
+                        # Try to get existing info or create new one
+                        if sub_metric_name not in infos:
+                            try:
+                                if labels:
+                                    infos[sub_metric_name] = Info(sub_metric_name, f"fnOS {resource_type} info for {key}_{sub_key}", list(labels.keys()))
+                                else:
+                                    infos[sub_metric_name] = Info(sub_metric_name, f"fnOS {resource_type} info for {key}_{sub_key}")
+                            except ValueError:
+                                # Info might already exist in registry, try to get it
+                                from prometheus_client import REGISTRY
+                                infos[sub_metric_name] = REGISTRY._names_to_collectors.get(sub_metric_name)
+                        
+                        # Set the info value with labels if provided
+                        if sub_metric_name in infos and infos[sub_metric_name]:
+                            try:
+                                infos[sub_metric_name].labels(**labels).info({info_key: str(sub_value)})
+                            except Exception as e:
+                                logger.warning(f"Failed to set info {sub_metric_name}: {e}")
             else:
-                # For string values, use Info metric
-                info_key = camel_to_snake(key)
-
-                # Try to get existing info or create new one
-                if metric_name not in infos:
-                    try:
-                        if labels:
-                            infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}", list(labels.keys()))
-                        else:
-                            infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}")
-                    except ValueError:
-                        # Info might already exist in registry, try to get it
-                        from prometheus_client import REGISTRY
-                        infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
-
-                # Set the info value with labels if provided
-                if metric_name in infos and infos[metric_name]:
-                    try:
-                        infos[metric_name].labels(**labels).info({info_key: str(value)})
-                    except Exception as e:
-                        logger.warning(f"Failed to set info {metric_name}: {e}")
-        else:
-            # Check if value is numeric or string (for non-CPU-temp metrics)
-            if isinstance(value, (int, float)):
-                # Try to get existing gauge or create new one
-                gauge_key = f"{metric_name}_{'_'.join(f'{k}_{v}' for k, v in labels.items())}" if labels else metric_name
-                if gauge_key not in gauges:
-                    try:
-                        # Only pass label names if there are labels
-                        if labels:
-                            gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}", list(labels.keys()))
-                        else:
-                            gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}")
-                    except ValueError:
-                        # Gauge might already exist in registry, try to get it
-                        from prometheus_client import REGISTRY
-                        gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
-
-                # Set the gauge value with labels if provided
-                if gauge_key in gauges and gauges[gauge_key]:
-                    try:
-                        # Only use labels if there are labels
-                        if labels:
+                # Handle top-level GPU properties
+                if isinstance(value, (int, float)):
+                    # Try to get existing gauge or create new one
+                    gauge_key = f"{metric_name}_{'_'.join(f'{k}_{v}' for k, v in labels.items())}" if labels else metric_name
+                    if gauge_key not in gauges:
+                        try:
+                            if labels:
+                                gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}", list(labels.keys()))
+                            else:
+                                gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}")
+                        except ValueError:
+                            # Gauge might already exist in registry, try to get it
+                            from prometheus_client import REGISTRY
+                            gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+                    
+                    # Set the gauge value with labels if provided
+                    if gauge_key in gauges and gauges[gauge_key]:
+                        try:
                             gauges[gauge_key].labels(**labels).set(value)
-                        else:
-                            gauges[gauge_key].set(value)
-                    except Exception as e:
-                        logger.warning(f"Failed to set gauge {metric_name}: {e}")
-            else:
-                # For string values, use Info metric
-                info_key = camel_to_snake(key)
-
-                # Try to get existing info or create new one
-                if metric_name not in infos:
-                    try:
-                        if labels:
-                            infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}", list(labels.keys()))
-                        else:
-                            infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}")
-                    except ValueError:
-                        # Info might already exist in registry, try to get it
-                        from prometheus_client import REGISTRY
-                        infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
-
-                # Set the info value with labels if provided
-                if metric_name in infos and infos[metric_name]:
-                    try:
-                        if labels:
+                        except Exception as e:
+                            logger.warning(f"Failed to set gauge {metric_name}: {e}")
+                else:
+                    # For string values, use Info metric
+                    info_key = camel_to_snake(key)
+                    
+                    # Try to get existing info or create new one
+                    if metric_name not in infos:
+                        try:
+                            if labels:
+                                infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}", list(labels.keys()))
+                            else:
+                                infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}")
+                        except ValueError:
+                            # Info might already exist in registry, try to get it
+                            from prometheus_client import REGISTRY
+                            infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+                    
+                    # Set the info value with labels if provided
+                    if metric_name in infos and infos[metric_name]:
+                        try:
                             infos[metric_name].labels(**labels).info({info_key: str(value)})
-                        else:
-                            infos[metric_name].info({info_key: str(value)})
-                    except Exception as e:
-                        logger.warning(f"Failed to set info {metric_name}: {e}")
+                        except Exception as e:
+                            logger.warning(f"Failed to set info {metric_name}: {e}")
+    else:
+        # Process each flattened key-value pair for non-GPU resources
+        for key, value in flattened_data.items():
+            # Create a metric name with the prefix and flattened key
+            metric_name = f"fnos_{resource_type.lower()}_{key}"
+
+            # Convert metric name to snake_case
+            metric_name = camel_to_snake(metric_name)
+
+            # Create labels dictionary for entity index if provided
+            labels = {}
+            if cpu_name is not None:
+                # For CPU metrics, use cpu_name as label instead of entity
+                labels['cpu_name'] = str(cpu_name)
+            elif entity_index is not None:
+                labels['entity'] = str(entity_index)
+
+            # Special handling for CPU temperature metrics
+            if resource_type.lower() == "cpu" and "temp" in key.lower():
+                # If value is a list, handle each temperature individually
+                if isinstance(value, list):
+                    # For each temperature in the list, create a separate metric
+                    for i, temp_value in enumerate(value):
+                        if isinstance(temp_value, (int, float)):
+                            # Create a metric name for each temperature entry
+                            temp_metric_name = metric_name
+                            temp_labels = labels.copy()
+                            # Add core label for each temperature in the list
+                            temp_labels['core'] = str(i)
+
+                            # Try to get existing gauge or create new one
+                            gauge_key = f"{temp_metric_name}_{'_'.join(f'{k}_{v}' for k, v in temp_labels.items())}" if temp_labels else temp_metric_name
+                            if gauge_key not in gauges:
+                                try:
+                                    if temp_labels:
+                                        gauges[gauge_key] = Gauge(temp_metric_name, f"fnOS {resource_type} metric for {key}", list(temp_labels.keys()))
+                                    else:
+                                        gauges[gauge_key] = Gauge(temp_metric_name, f"fnOS {resource_type} metric for {key}")
+                                except ValueError:
+                                    # Gauge might already exist in registry, try to get it
+                                    from prometheus_client import REGISTRY
+                                    gauges[gauge_key] = REGISTRY._names_to_collectors.get(temp_metric_name)
+
+                            # Set the gauge value with labels if provided
+                            if gauge_key in gauges and gauges[gauge_key]:
+                                try:
+                                    gauges[gauge_key].labels(**temp_labels).set(temp_value)
+                                except Exception as e:
+                                    logger.warning(f"Failed to set gauge {temp_metric_name}: {e}")
+                elif isinstance(value, (int, float)):
+                    # For single numeric temperature value, use it directly as the metric value
+                    # Try to get existing gauge or create new one
+                    gauge_key = f"{metric_name}_{'_'.join(f'{k}_{v}' for k, v in labels.items())}" if labels else metric_name
+                    if gauge_key not in gauges:
+                        try:
+                            if labels:
+                                gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}", list(labels.keys()))
+                            else:
+                                gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}")
+                        except ValueError:
+                            # Gauge might already exist in registry, try to get it
+                            from prometheus_client import REGISTRY
+                            gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+
+                    # Set the gauge value with labels if provided
+                    if gauge_key in gauges and gauges[gauge_key]:
+                        try:
+                            gauges[gauge_key].labels(**labels).set(value)
+                        except Exception as e:
+                            logger.warning(f"Failed to set gauge {metric_name}: {e}")
+                else:
+                    # For string values, use Info metric
+                    info_key = camel_to_snake(key)
+
+                    # Try to get existing info or create new one
+                    if metric_name not in infos:
+                        try:
+                            if labels:
+                                infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}", list(labels.keys()))
+                            else:
+                                infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}")
+                        except ValueError:
+                            # Info might already exist in registry, try to get it
+                            from prometheus_client import REGISTRY
+                            infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+
+                    # Set the info value with labels if provided
+                    if metric_name in infos and infos[metric_name]:
+                        try:
+                            infos[metric_name].labels(**labels).info({info_key: str(value)})
+                        except Exception as e:
+                            logger.warning(f"Failed to set info {metric_name}: {e}")
+            else:
+                # Check if value is numeric or string (for non-CPU-temp metrics)
+                if isinstance(value, (int, float)):
+                    # Try to get existing gauge or create new one
+                    gauge_key = f"{metric_name}_{'_'.join(f'{k}_{v}' for k, v in labels.items())}" if labels else metric_name
+                    if gauge_key not in gauges:
+                        try:
+                            # Only pass label names if there are labels
+                            if labels:
+                                gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}", list(labels.keys()))
+                            else:
+                                gauges[gauge_key] = Gauge(metric_name, f"fnOS {resource_type} metric for {key}")
+                        except ValueError:
+                            # Gauge might already exist in registry, try to get it
+                            from prometheus_client import REGISTRY
+                            gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+
+                    # Set the gauge value with labels if provided
+                    if gauge_key in gauges and gauges[gauge_key]:
+                        try:
+                            # Only use labels if there are labels
+                            if labels:
+                                gauges[gauge_key].labels(**labels).set(value)
+                            else:
+                                gauges[gauge_key].set(value)
+                        except Exception as e:
+                            logger.warning(f"Failed to set gauge {metric_name}: {e}")
+                else:
+                    # For string values, use Info metric
+                    info_key = camel_to_snake(key)
+
+                    # Try to get existing info or create new one
+                    if metric_name not in infos:
+                        try:
+                            if labels:
+                                infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}", list(labels.keys()))
+                            else:
+                                infos[metric_name] = Info(metric_name, f"fnOS {resource_type} info for {key}")
+                        except ValueError:
+                            # Info might already exist in registry, try to get it
+                            from prometheus_client import REGISTRY
+                            infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+
+                    # Set the info value with labels if provided
+                    if metric_name in infos and infos[metric_name]:
+                        try:
+                            if labels:
+                                infos[metric_name].labels(**labels).info({info_key: str(value)})
+                            else:
+                                infos[metric_name].info({info_key: str(value)})
+                        except Exception as e:
+                            logger.warning(f"Failed to set info {metric_name}: {e}")
 
 
 async def collect_disk_performance_metrics(resource_monitor_instance):
