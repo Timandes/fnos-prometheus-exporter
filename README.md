@@ -35,6 +35,35 @@ docker run -d \
   ghcr.io/timandes/fnos-prometheus-exporter:latest
 ```
 
+## Grafana Dashboard
+
+本项目提供了预配置的Grafana Dashboard，用于可视化fnOS系统指标。
+
+### 导入Dashboard
+
+1. 在Grafana中，导航到 "Dashboards" → "Import"
+2. 选择 `/dashboards` 目录下的JSON文件，或复制JSON内容粘贴到导入框
+3. 配置数据源为你的Prometheus实例
+4. 点击 "Import" 完成导入
+
+### 可用Dashboard
+
+- `generic-public.json` - fnOS系统总览仪表盘
+
+
+
+在线查看大盘快照：
+
+https://snapshots.raintank.io/dashboard/snapshot/riPpjTkDQ4KvZAWDaVlBXnHXcRdqzdD9
+
+
+
+或者参考以下预览截图：
+
+![Dashboard Screenshot](dashboards/generic.png)
+
+
+
 ### Docker Compose
 
 您也可以使用 Docker Compose 来运行 fnOS Prometheus Exporter。创建一个 `docker-compose.yml` 文件：
