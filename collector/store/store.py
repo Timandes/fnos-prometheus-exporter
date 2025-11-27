@@ -43,6 +43,89 @@ from globals import gauges, infos
 logger = logging.getLogger(__name__)
 
 
+def _extract_data_from_response(response):
+    """Extract data from response, handling different possible structures"""
+    if not response or not isinstance(response, dict):
+        return None
+    
+    if "data" in response:
+        data = response["data"]
+        logger.debug(f"Found data field in response: {data}")
+    else:
+        # Use the entire response as data if no data field exists
+        data = response
+        logger.debug(f"Using entire response as data: {data}")
+    
+    return data
+
+
+def _has_array_or_block_data(data):
+    """Check if data contains array or block information"""
+    has_array_data = False
+    has_block_data = False
+
+    if data and isinstance(data, dict):
+        has_array_data = "array" in data and isinstance(data["array"], list)
+        has_block_data = "block" in data and isinstance(data["block"], list)
+
+    logger.debug(f"Has array data: {has_array_data}, Has block data: {has_block_data}")
+    return has_array_data, has_block_data
+
+
+def _process_array_data(array_data):
+    """Process array data entities"""
+    logger.debug(f"Processing {len(array_data)} array entities")
+    for i, entity_data in enumerate(array_data):
+        logger.debug(f"Processing array entity {i}: {entity_data}")
+        # Process the main entity data
+        main_data = {k: v for k, v in entity_data.items() if k != 'md'}
+        flattened_data = flatten_dict(main_data, sep='_')
+        set_store_metrics(flattened_data, i, "array")
+
+        # Process md array if it exists
+        if "md" in entity_data:
+            md_data = entity_data["md"]
+            if isinstance(md_data, list):
+                for j, md_entity in enumerate(md_data):
+                    md_flattened = flatten_dict(md_entity, sep='_')
+                    set_store_metrics(md_flattened, f"{i}_{j}", "array_md")
+
+
+def _process_block_data(block_data):
+    """Process block data entities"""
+    logger.debug(f"Processing {len(block_data)} block entities")
+    for i, entity_data in enumerate(block_data):
+        logger.debug(f"Processing block entity {i}: {entity_data}")
+        # Process the main entity data
+        main_data = {k: v for k, v in entity_data.items() if k not in ['md', 'partitions', 'arr-devices']}
+        flattened_data = flatten_dict(main_data, sep='_')
+        set_store_metrics(flattened_data, i, "block")
+
+        # Process md array if it exists
+        if "md" in entity_data:
+            md_data = entity_data["md"]
+            if isinstance(md_data, list):
+                for j, md_entity in enumerate(md_data):
+                    md_flattened = flatten_dict(md_entity, sep='_')
+                    set_store_metrics(md_flattened, f"{i}_{j}", "block_md")
+
+        # Process partitions if they exist
+        if "partitions" in entity_data:
+            partitions_data = entity_data["partitions"]
+            if isinstance(partitions_data, list):
+                for j, partition_entity in enumerate(partitions_data):
+                    partition_flattened = flatten_dict(partition_entity, sep='_')
+                    set_store_metrics(partition_flattened, f"{i}_{j}", "block_partition")
+
+        # Process arr-devices if they exist
+        if "arr-devices" in entity_data:
+            arr_devices_data = entity_data["arr-devices"]
+            if isinstance(arr_devices_data, list):
+                for j, arr_device_entity in enumerate(arr_devices_data):
+                    arr_device_flattened = flatten_dict(arr_device_entity, sep='_')
+                    set_store_metrics(arr_device_flattened, f"{i}_{j}", "block_arr_device")
+
+
 async def collect_store_metrics(store_instance):
     """Collect store metrics from Store"""
     global gauges, infos
@@ -53,82 +136,17 @@ async def collect_store_metrics(store_instance):
         logger.debug(f"Store general response: {response}")
 
         # Process the response data
-        if response and isinstance(response, dict):
-            # Check if we have data directly or nested in a data field
-            data = None
-            if "data" in response:
-                data = response["data"]
-                logger.debug(f"Found data field in response: {data}")
-            else:
-                # Use the entire response as data if no data field exists
-                data = response
-                logger.debug(f"Using entire response as data: {data}")
-
-            # Check if we have array or block data
-            has_array_data = False
-            has_block_data = False
-
-            if data and isinstance(data, dict):
-                has_array_data = "array" in data and isinstance(data["array"], list)
-                has_block_data = "block" in data and isinstance(data["block"], list)
-
-            logger.debug(f"Has array data: {has_array_data}, Has block data: {has_block_data}")
+        data = _extract_data_from_response(response)
+        if data:
+            has_array_data, has_block_data = _has_array_or_block_data(data)
 
             # Process array data if it exists
             if has_array_data:
-                array_data = data["array"]
-                logger.debug(f"Processing {len(array_data)} array entities")
-                # Process each array entity
-                for i, entity_data in enumerate(array_data):
-                    logger.debug(f"Processing array entity {i}: {entity_data}")
-                    # Process the main entity data
-                    main_data = {k: v for k, v in entity_data.items() if k != 'md'}
-                    flattened_data = flatten_dict(main_data, sep='_')
-                    set_store_metrics(flattened_data, i, "array")
-
-                    # Process md array if it exists
-                    if "md" in entity_data:
-                        md_data = entity_data["md"]
-                        if isinstance(md_data, list):
-                            for j, md_entity in enumerate(md_data):
-                                md_flattened = flatten_dict(md_entity, sep='_')
-                                set_store_metrics(md_flattened, f"{i}_{j}", "array_md")
+                _process_array_data(data["array"])
 
             # Process block data if it exists
             if has_block_data:
-                block_data = data["block"]
-                logger.debug(f"Processing {len(block_data)} block entities")
-                # Process each block entity
-                for i, entity_data in enumerate(block_data):
-                    logger.debug(f"Processing block entity {i}: {entity_data}")
-                    # Process the main entity data
-                    main_data = {k: v for k, v in entity_data.items() if k not in ['md', 'partitions', 'arr-devices']}
-                    flattened_data = flatten_dict(main_data, sep='_')
-                    set_store_metrics(flattened_data, i, "block")
-
-                    # Process md array if it exists
-                    if "md" in entity_data:
-                        md_data = entity_data["md"]
-                        if isinstance(md_data, list):
-                            for j, md_entity in enumerate(md_data):
-                                md_flattened = flatten_dict(md_entity, sep='_')
-                                set_store_metrics(md_flattened, f"{i}_{j}", "block_md")
-
-                    # Process partitions if they exist
-                    if "partitions" in entity_data:
-                        partitions_data = entity_data["partitions"]
-                        if isinstance(partitions_data, list):
-                            for j, partition_entity in enumerate(partitions_data):
-                                partition_flattened = flatten_dict(partition_entity, sep='_')
-                                set_store_metrics(partition_flattened, f"{i}_{j}", "block_partition")
-
-                    # Process arr-devices if they exist
-                    if "arr-devices" in entity_data:
-                        arr_devices_data = entity_data["arr-devices"]
-                        if isinstance(arr_devices_data, list):
-                            for j, arr_device_entity in enumerate(arr_devices_data):
-                                arr_device_flattened = flatten_dict(arr_device_entity, sep='_')
-                                set_store_metrics(arr_device_flattened, f"{i}_{j}", "block_arr_device")
+                _process_block_data(data["block"])
 
             # If we have either array or block data, consider it a success
             if has_array_data or has_block_data:
@@ -146,6 +164,45 @@ async def collect_store_metrics(store_instance):
         return False
 
 
+def _extract_disk_data_from_response(response):
+    """Extract disk data from response, handling different possible structures"""
+    if not response or not isinstance(response, (dict, list)):
+        return None
+
+    disk_data = None
+    if isinstance(response, list):
+        # Use the entire response as data if it's a list
+        disk_data = response
+        logger.debug(f"Using entire response as disk data: {disk_data}")
+    elif isinstance(response, dict):
+        if "disk" in response and isinstance(response["disk"], list):
+            disk_data = response["disk"]
+            logger.debug(f"Found disk field in response: {disk_data}")
+        elif "data" in response:
+            # Check if data field contains disk information
+            if isinstance(response["data"], list):
+                disk_data = response["data"]
+                logger.debug(f"Found data field in disk response: {disk_data}")
+            elif (isinstance(response["data"], dict) and 
+                  "disk" in response["data"] and 
+                  isinstance(response["data"]["disk"], list)):
+                disk_data = response["data"]["disk"]
+                logger.debug(f"Found data.disk field in disk response: {disk_data}")
+    
+    return disk_data
+
+
+def _process_disk_data(disk_data):
+    """Process disk data entities"""
+    logger.debug(f"Processing {len(disk_data)} disk entities")
+    for entity_data in disk_data:
+        logger.debug(f"Processing disk entity: {entity_data}")
+        # Flatten the entity data
+        flattened_data = flatten_dict(entity_data, sep='_')
+        # Set metrics with disk name as tag (i parameter is kept for function signature compatibility but not used in the function)
+        set_disk_metrics(flattened_data, None)
+
+
 async def collect_disk_metrics(store_instance):
     """Collect disk metrics from Store using list_disks method"""
     global gauges, infos
@@ -156,49 +213,89 @@ async def collect_disk_metrics(store_instance):
         logger.debug(f"Disk list response: {response}")
 
         # Process the response data
-        if response and isinstance(response, dict):
-            # Check if we have disk data in the response
-            disk_data = None
-            if "disk" in response and isinstance(response["disk"], list):
-                disk_data = response["disk"]
-                logger.debug(f"Found disk field in response: {disk_data}")
-            elif "data" in response:
-                # Check if data field contains disk information
-                if isinstance(response["data"], list):
-                    disk_data = response["data"]
-                    logger.debug(f"Found data field in disk response: {disk_data}")
-                elif isinstance(response["data"], dict) and "disk" in response["data"] and isinstance(response["data"]["disk"], list):
-                    disk_data = response["data"]["disk"]
-                    logger.debug(f"Found data.disk field in disk response: {disk_data}")
-            else:
-                # Use the entire response as data if no specific fields exist
-                if isinstance(response, list):
-                    disk_data = response
-                    logger.debug(f"Using entire response as disk data: {disk_data}")
+        disk_data = _extract_disk_data_from_response(response)
+        
+        # Process disk data if it exists
+        if disk_data and isinstance(disk_data, list):
+            _process_disk_data(disk_data)
 
-            # Process disk data if it exists
-            if disk_data and isinstance(disk_data, list):
-                logger.debug(f"Processing {len(disk_data)} disk entities")
-                # Process each disk entity
-                for entity_data in disk_data:
-                    logger.debug(f"Processing disk entity: {entity_data}")
-                    # Flatten the entity data
-                    flattened_data = flatten_dict(entity_data, sep='_')
-                    # Set metrics with disk name as tag (i parameter is kept for function signature compatibility but not used in the function)
-                    set_disk_metrics(flattened_data, None)
-
-                logger.info("Disk metrics collected successfully from fnOS system")
-                return True
-            else:
-                logger.warning("No disk data found in list_disks response")
-                logger.debug(f"Response content: {response}")
-                return False
+            logger.info("Disk metrics collected successfully from fnOS system")
+            return True
         else:
-            logger.warning("No valid response data from list_disks")
+            logger.warning("No disk data found in list_disks response")
+            logger.debug(f"Response content: {response}")
             return False
     except Exception as e:
         logger.error(f"Error collecting disk metrics: {e}")
         return False
+
+
+def _create_disk_labels(flattened_data):
+    """Create labels dictionary for disk metrics"""
+    disk_name = None
+    if 'name' in flattened_data:
+        disk_name = flattened_data['name']
+    elif 'disk_name' in flattened_data:
+        disk_name = flattened_data['disk_name']
+
+    labels = {}
+    if disk_name is not None:
+        labels['device_name'] = str(disk_name)
+    
+    return labels, disk_name
+
+
+def _set_disk_gauge_metric(key, value, metric_name, labels, disk_name):
+    """Set gauge metric for disk data"""
+    # Try to get existing gauge or create new one
+    gauge_key = f"{metric_name}_{disk_name}" if disk_name is not None else metric_name
+    if gauge_key not in gauges:
+        try:
+            if labels:
+                gauges[gauge_key] = Gauge(metric_name, f"fnOS disk metric for {key}", list(labels.keys()))
+            else:
+                gauges[gauge_key] = Gauge(metric_name, f"fnOS disk metric for {key}")
+        except ValueError:
+            # Gauge might already exist in registry, try to get it
+            from prometheus_client import REGISTRY
+            gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+
+    # Set the gauge value with labels if provided
+    if gauge_key in gauges and gauges[gauge_key]:
+        try:
+            if labels:
+                gauges[gauge_key].labels(**labels).set(value)
+            else:
+                gauges[gauge_key].set(value)
+        except Exception as e:
+            logger.warning(f"Failed to set gauge {metric_name}: {e}")
+
+
+def _set_disk_info_metric(key, value, metric_name, labels):
+    """Set info metric for disk data"""
+    info_key = camel_to_snake(key)
+
+    # Try to get existing info or create new one
+    if metric_name not in infos:
+        try:
+            if labels:
+                infos[metric_name] = Info(metric_name, f"fnOS disk info for {key}", list(labels.keys()))
+            else:
+                infos[metric_name] = Info(metric_name, f"fnOS disk info for {key}")
+        except ValueError:
+            # Info might already exist in registry, try to get it
+            from prometheus_client import REGISTRY
+            infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+
+    # Set the info value with labels if provided
+    if metric_name in infos and infos[metric_name]:
+        try:
+            if labels:
+                infos[metric_name].labels(**labels).info({info_key: str(value)})
+            else:
+                infos[metric_name].info({info_key: str(value)})
+        except Exception as e:
+            logger.warning(f"Failed to set info {metric_name}: {e}")
 
 
 def set_disk_metrics(flattened_data, entity_index=None):
@@ -206,11 +303,7 @@ def set_disk_metrics(flattened_data, entity_index=None):
     global gauges, infos
 
     # Extract disk name from the flattened data if available
-    disk_name = None
-    if 'name' in flattened_data:
-        disk_name = flattened_data['name']
-    elif 'disk_name' in flattened_data:
-        disk_name = flattened_data['disk_name']
+    labels, disk_name = _create_disk_labels(flattened_data)
 
     # Process each flattened key-value pair
     for key, value in flattened_data.items():
@@ -220,60 +313,89 @@ def set_disk_metrics(flattened_data, entity_index=None):
         # Convert metric name to snake_case
         metric_name = camel_to_snake(metric_name)
 
-        # Create labels dictionary for device name if available
-        labels = {}
-        if disk_name is not None:
-            labels['device_name'] = str(disk_name)
-
         # Check if value is numeric or string
         if isinstance(value, (int, float)):
-            # Try to get existing gauge or create new one
-            gauge_key = f"{metric_name}_{disk_name}" if disk_name is not None else metric_name
-            if gauge_key not in gauges:
-                try:
-                    if labels:
-                        gauges[gauge_key] = Gauge(metric_name, f"fnOS disk metric for {key}", list(labels.keys()))
-                    else:
-                        gauges[gauge_key] = Gauge(metric_name, f"fnOS disk metric for {key}")
-                except ValueError:
-                    # Gauge might already exist in registry, try to get it
-                    from prometheus_client import REGISTRY
-                    gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
-
-            # Set the gauge value with labels if provided
-            if gauge_key in gauges and gauges[gauge_key]:
-                try:
-                    if labels:
-                        gauges[gauge_key].labels(**labels).set(value)
-                    else:
-                        gauges[gauge_key].set(value)
-                except Exception as e:
-                    logger.warning(f"Failed to set gauge {metric_name}: {e}")
+            _set_disk_gauge_metric(key, value, metric_name, labels, disk_name)
         else:
-            # For string values, use Info metric
-            info_key = camel_to_snake(key)
+            _set_disk_info_metric(key, value, metric_name, labels)
 
-            # Try to get existing info or create new one
-            if metric_name not in infos:
-                try:
-                    if labels:
-                        infos[metric_name] = Info(metric_name, f"fnOS disk info for {key}", list(labels.keys()))
-                    else:
-                        infos[metric_name] = Info(metric_name, f"fnOS disk info for {key}")
-                except ValueError:
-                    # Info might already exist in registry, try to get it
-                    from prometheus_client import REGISTRY
-                    infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
 
-            # Set the info value with labels if provided
-            if metric_name in infos and infos[metric_name]:
-                try:
-                    if labels:
-                        infos[metric_name].labels(**labels).info({info_key: str(value)})
-                    else:
-                        infos[metric_name].info({info_key: str(value)})
-                except Exception as e:
-                    logger.warning(f"Failed to set info {metric_name}: {e}")
+def _create_store_labels(flattened_data, entity_index, entity_type):
+    """Create labels dictionary for store metrics based on entity type and index"""
+    labels = {}
+    # Special handling for array entities - use array_name instead of entity index
+    if entity_index is not None and entity_type and entity_type.startswith("array"):
+        # For array entities, try to extract the array name from the data
+        array_name = flattened_data.get('name', str(entity_index))
+        labels['array_name'] = str(array_name)
+    # Special handling for block entities - use block_name instead of entity index
+    elif entity_index is not None and entity_type and entity_type.startswith("block"):
+        # For block entities, try to extract the block name from the data (excluding subtypes like block_md, block_partition)
+        if entity_type in ['block', 'block_partition', 'block_arr_device'] and 'name' in flattened_data:
+            block_name = flattened_data.get('name', str(entity_index))
+            labels['block_name'] = str(block_name)
+        else:
+            labels['entity'] = str(entity_index)
+    elif entity_index is not None:
+        labels['entity'] = str(entity_index)
+
+    if entity_type:
+        labels['type'] = entity_type
+    
+    return labels
+
+
+def _set_store_gauge_metric(key, value, metric_name, labels, entity_index, entity_type):
+    """Set gauge metric for store data"""
+    # Try to get existing gauge or create new one
+    gauge_key = f"{metric_name}_{entity_index}_{entity_type}" if entity_index is not None and entity_type else metric_name
+    if gauge_key not in gauges:
+        try:
+            if labels:
+                gauges[gauge_key] = Gauge(metric_name, f"fnOS store {entity_type if entity_type else 'general'} metric for {key}", list(labels.keys()))
+            else:
+                gauges[gauge_key] = Gauge(metric_name, f"fnOS store {entity_type if entity_type else 'general'} metric for {key}")
+        except ValueError:
+            # Gauge might already exist in registry, try to get it
+            from prometheus_client import REGISTRY
+            gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+
+    # Set the gauge value with labels if provided
+    if gauge_key in gauges and gauges[gauge_key]:
+        try:
+            if labels:
+                gauges[gauge_key].labels(**labels).set(value)
+            else:
+                gauges[gauge_key].set(value)
+        except Exception as e:
+            logger.warning(f"Failed to set gauge {metric_name}: {e}")
+
+
+def _set_store_info_metric(key, value, metric_name, labels, entity_type):
+    """Set info metric for store data"""
+    info_key = camel_to_snake(key)
+
+    # Try to get existing info or create new one
+    if metric_name not in infos:
+        try:
+            if labels:
+                infos[metric_name] = Info(metric_name, f"fnOS store {entity_type if entity_type else 'general'} info for {key}", list(labels.keys()))
+            else:
+                infos[metric_name] = Info(metric_name, f"fnOS store {entity_type if entity_type else 'general'} info for {key}")
+        except ValueError:
+            # Info might already exist in registry, try to get it
+            from prometheus_client import REGISTRY
+            infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+
+    # Set the info value with labels if provided
+    if metric_name in infos and infos[metric_name]:
+        try:
+            if labels:
+                infos[metric_name].labels(**labels).info({info_key: str(value)})
+            else:
+                infos[metric_name].info({info_key: str(value)})
+        except Exception as e:
+            logger.warning(f"Failed to set info {metric_name}: {e}")
 
 
 def set_store_metrics(flattened_data, entity_index=None, entity_type=None):
@@ -292,72 +414,10 @@ def set_store_metrics(flattened_data, entity_index=None, entity_type=None):
         metric_name = camel_to_snake(metric_name)
 
         # Create labels dictionary for entity index and type if provided
-        labels = {}
-        # Special handling for array entities - use array_name instead of entity index
-        if entity_index is not None and entity_type and entity_type.startswith("array"):
-            # For array entities, try to extract the array name from the data
-            array_name = flattened_data.get('name', str(entity_index))
-            labels['array_name'] = str(array_name)
-        # Special handling for block entities - use block_name instead of entity index
-        elif entity_index is not None and entity_type and entity_type.startswith("block"):
-            # For block entities, try to extract the block name from the data (excluding subtypes like block_md, block_partition)
-            if entity_type in ['block', 'block_partition', 'block_arr_device'] and 'name' in flattened_data:
-                block_name = flattened_data.get('name', str(entity_index))
-                labels['block_name'] = str(block_name)
-            else:
-                labels['entity'] = str(entity_index)
-        elif entity_index is not None:
-            labels['entity'] = str(entity_index)
-
-        if entity_type:
-            labels['type'] = entity_type
+        labels = _create_store_labels(flattened_data, entity_index, entity_type)
 
         # Check if value is numeric or string
         if isinstance(value, (int, float)):
-            # Try to get existing gauge or create new one
-            gauge_key = f"{metric_name}_{entity_index}_{entity_type}" if entity_index is not None and entity_type else metric_name
-            if gauge_key not in gauges:
-                try:
-                    if labels:
-                        gauges[gauge_key] = Gauge(metric_name, f"fnOS store {entity_type if entity_type else 'general'} metric for {key}", list(labels.keys()))
-                    else:
-                        gauges[gauge_key] = Gauge(metric_name, f"fnOS store {entity_type if entity_type else 'general'} metric for {key}")
-                except ValueError:
-                    # Gauge might already exist in registry, try to get it
-                    from prometheus_client import REGISTRY
-                    gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
-
-            # Set the gauge value with labels if provided
-            if gauge_key in gauges and gauges[gauge_key]:
-                try:
-                    if labels:
-                        gauges[gauge_key].labels(**labels).set(value)
-                    else:
-                        gauges[gauge_key].set(value)
-                except Exception as e:
-                    logger.warning(f"Failed to set gauge {metric_name}: {e}")
+            _set_store_gauge_metric(key, value, metric_name, labels, entity_index, entity_type)
         else:
-            # For string values, use Info metric
-            info_key = camel_to_snake(key)
-
-            # Try to get existing info or create new one
-            if metric_name not in infos:
-                try:
-                    if labels:
-                        infos[metric_name] = Info(metric_name, f"fnOS store {entity_type if entity_type else 'general'} info for {key}", list(labels.keys()))
-                    else:
-                        infos[metric_name] = Info(metric_name, f"fnOS store {entity_type if entity_type else 'general'} info for {key}")
-                except ValueError:
-                    # Info might already exist in registry, try to get it
-                    from prometheus_client import REGISTRY
-                    infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
-
-            # Set the info value with labels if provided
-            if metric_name in infos and infos[metric_name]:
-                try:
-                    if labels:
-                        infos[metric_name].labels(**labels).info({info_key: str(value)})
-                    else:
-                        infos[metric_name].info({info_key: str(value)})
-                except Exception as e:
-                    logger.warning(f"Failed to set info {metric_name}: {e}")
+            _set_store_info_metric(key, value, metric_name, labels, entity_type)

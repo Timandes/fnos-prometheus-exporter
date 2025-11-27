@@ -43,6 +43,30 @@ from globals import gauges, infos
 logger = logging.getLogger(__name__)
 
 
+def _process_network_list_response(list_response):
+    """Process network list response data"""
+    if list_response and isinstance(list_response, dict) and "data" in list_response and "net" in list_response["data"]:
+        net_data = list_response["data"]["net"]
+        if "ifs" in net_data and isinstance(net_data["ifs"], list):
+            for entity_data in net_data["ifs"]:
+                # Flatten the entity data
+                flattened_data = flatten_dict(entity_data, sep='_')
+                # Set metrics with interface name as tag
+                set_network_metrics(flattened_data, "list")
+
+
+def _process_resource_monitor_response(resmon_response):
+    """Process ResourceMonitor network response data"""
+    if resmon_response and isinstance(resmon_response, dict) and "data" in resmon_response:
+        resmon_data = resmon_response["data"]
+        if "ifs" in resmon_data and isinstance(resmon_data["ifs"], list):
+            for entity_data in resmon_data["ifs"]:
+                # Flatten the entity data
+                flattened_data = flatten_dict(entity_data, sep='_')
+                # Set metrics with interface name as tag
+                set_network_metrics(flattened_data, "resmon")
+
+
 async def collect_network_metrics(network_instance, resource_monitor_instance):
     """Collect network metrics from Network and ResourceMonitor"""
     global gauges, infos
@@ -57,24 +81,10 @@ async def collect_network_metrics(network_instance, resource_monitor_instance):
         logger.debug(f"ResourceMonitor network response: {resmon_response}")
 
         # Process the network list response data
-        if list_response and isinstance(list_response, dict) and "data" in list_response and "net" in list_response["data"]:
-            net_data = list_response["data"]["net"]
-            if "ifs" in net_data and isinstance(net_data["ifs"], list):
-                for entity_data in net_data["ifs"]:
-                    # Flatten the entity data
-                    flattened_data = flatten_dict(entity_data, sep='_')
-                    # Set metrics with interface name as tag
-                    set_network_metrics(flattened_data, "list")
+        _process_network_list_response(list_response)
 
         # Process the ResourceMonitor network response data
-        if resmon_response and isinstance(resmon_response, dict) and "data" in resmon_response:
-            resmon_data = resmon_response["data"]
-            if "ifs" in resmon_data and isinstance(resmon_data["ifs"], list):
-                for entity_data in resmon_data["ifs"]:
-                    # Flatten the entity data
-                    flattened_data = flatten_dict(entity_data, sep='_')
-                    # Set metrics with interface name as tag
-                    set_network_metrics(flattened_data, "resmon")
+        _process_resource_monitor_response(resmon_response)
 
         logger.info("Network metrics collected successfully from fnOS system")
         return True
@@ -83,16 +93,88 @@ async def collect_network_metrics(network_instance, resource_monitor_instance):
         return False
 
 
-def set_network_metrics(flattened_data, source):
-    """Set network metrics with interface name as tags"""
-    global gauges, infos
-
-    # Extract interface name from the flattened data if available
+def _extract_interface_name(flattened_data):
+    """Extract interface name from the flattened data if available"""
     interface_name = None
     if 'name' in flattened_data:
         interface_name = flattened_data['name']
     elif 'if_name' in flattened_data:
         interface_name = flattened_data['if_name']
+    
+    return interface_name
+
+
+def _create_network_labels(interface_name):
+    """Create labels dictionary for network metrics"""
+    labels = {}
+    if interface_name is not None:
+        labels['interface_name'] = str(interface_name)
+    
+    return labels
+
+
+def _set_network_gauge_metric(key, value, metric_name, labels, interface_name):
+    """Set gauge metric for network data"""
+    # Try to get existing gauge or create new one
+    gauge_key = f"{metric_name}_{interface_name}" if interface_name is not None else metric_name
+    if gauge_key not in gauges:
+        try:
+            if labels:
+                gauges[gauge_key] = Gauge(metric_name, f"fnOS network metric for {key}", list(labels.keys()))
+            else:
+                gauges[gauge_key] = Gauge(metric_name, f"fnOS network metric for {key}")
+        except ValueError:
+            # Gauge might already exist in registry, try to get it
+            from prometheus_client import REGISTRY
+            gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
+
+    # Set the gauge value with labels if provided
+    if gauge_key in gauges and gauges[gauge_key]:
+        try:
+            if labels:
+                gauges[gauge_key].labels(**labels).set(value)
+            else:
+                gauges[gauge_key].set(value)
+        except Exception as e:
+            logger.warning(f"Failed to set gauge {metric_name}: {e}")
+
+
+def _set_network_info_metric(key, value, metric_name, labels):
+    """Set info metric for network data"""
+    info_key = camel_to_snake(key)
+
+    # Try to get existing info or create new one
+    if metric_name not in infos:
+        try:
+            if labels:
+                infos[metric_name] = Info(metric_name, f"fnOS network info for {key}", list(labels.keys()))
+            else:
+                infos[metric_name] = Info(metric_name, f"fnOS network info for {key}")
+        except ValueError:
+            # Info might already exist in registry, try to get it
+            from prometheus_client import REGISTRY
+            infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+
+    # Set the info value with labels if provided
+    if metric_name in infos and infos[metric_name]:
+        try:
+            if labels:
+                infos[metric_name].labels(**labels).info({info_key: str(value)})
+            else:
+                infos[metric_name].info({info_key: str(value)})
+        except Exception as e:
+            logger.warning(f"Failed to set info {metric_name}: {e}")
+
+
+def set_network_metrics(flattened_data, source):
+    """Set network metrics with interface name as tags"""
+    global gauges, infos
+
+    # Extract interface name from the flattened data if available
+    interface_name = _extract_interface_name(flattened_data)
+    
+    # Create labels dictionary for interface name if available
+    labels = _create_network_labels(interface_name)
 
     # Process each flattened key-value pair
     for key, value in flattened_data.items():
@@ -102,57 +184,8 @@ def set_network_metrics(flattened_data, source):
         # Convert metric name to snake_case
         metric_name = camel_to_snake(metric_name)
 
-        # Create labels dictionary for interface name if available
-        labels = {}
-        if interface_name is not None:
-            labels['interface_name'] = str(interface_name)
-
         # Check if value is numeric or string
         if isinstance(value, (int, float)):
-            # Try to get existing gauge or create new one
-            gauge_key = f"{metric_name}_{interface_name}" if interface_name is not None else metric_name
-            if gauge_key not in gauges:
-                try:
-                    if labels:
-                        gauges[gauge_key] = Gauge(metric_name, f"fnOS network metric for {key}", list(labels.keys()))
-                    else:
-                        gauges[gauge_key] = Gauge(metric_name, f"fnOS network metric for {key}")
-                except ValueError:
-                    # Gauge might already exist in registry, try to get it
-                    from prometheus_client import REGISTRY
-                    gauges[gauge_key] = REGISTRY._names_to_collectors.get(metric_name)
-
-            # Set the gauge value with labels if provided
-            if gauge_key in gauges and gauges[gauge_key]:
-                try:
-                    if labels:
-                        gauges[gauge_key].labels(**labels).set(value)
-                    else:
-                        gauges[gauge_key].set(value)
-                except Exception as e:
-                    logger.warning(f"Failed to set gauge {metric_name}: {e}")
+            _set_network_gauge_metric(key, value, metric_name, labels, interface_name)
         else:
-            # For string values, use Info metric
-            info_key = camel_to_snake(key)
-
-            # Try to get existing info or create new one
-            if metric_name not in infos:
-                try:
-                    if labels:
-                        infos[metric_name] = Info(metric_name, f"fnOS network info for {key}", list(labels.keys()))
-                    else:
-                        infos[metric_name] = Info(metric_name, f"fnOS network info for {key}")
-                except ValueError:
-                    # Info might already exist in registry, try to get it
-                    from prometheus_client import REGISTRY
-                    infos[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
-
-            # Set the info value with labels if provided
-            if metric_name in infos and infos[metric_name]:
-                try:
-                    if labels:
-                        infos[metric_name].labels(**labels).info({info_key: str(value)})
-                    else:
-                        infos[metric_name].info({info_key: str(value)})
-                except Exception as e:
-                    logger.warning(f"Failed to set info {metric_name}: {e}")
+            _set_network_info_metric(key, value, metric_name, labels)
