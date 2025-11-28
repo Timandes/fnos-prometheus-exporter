@@ -7,7 +7,7 @@ setup(
     py_modules=['main'],
     install_requires=[
         "prometheus-client>=0.20.0",
-        "fnos>=0.7.0",
+        "fnos>=0.9.0",
     ],
     entry_points={
         'console_scripts': [
