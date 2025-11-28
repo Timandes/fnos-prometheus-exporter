@@ -421,3 +421,93 @@ def set_store_metrics(flattened_data, entity_index=None, entity_type=None):
             _set_store_gauge_metric(key, value, metric_name, labels, entity_index, entity_type)
         else:
             _set_store_info_metric(key, value, metric_name, labels, entity_type)
+
+
+async def collect_smart_metrics(store_instance):
+    """Collect SMART metrics from Store using get_disk_smart method for each disk"""
+    global gauges, infos
+
+    try:
+        # Get the disk list first
+        disk_list_response = await store_instance.list_disks(no_hot_spare=True, timeout=10.0)
+        logger.debug(f"Disk list response: {disk_list_response}")
+
+        # Process the disk list response
+        disk_data = _extract_disk_data_from_response(disk_list_response)
+        
+        if disk_data and isinstance(disk_data, list):
+            # Process each disk to get SMART data
+            for disk_info in disk_data:
+                if 'name' in disk_info:
+                    disk_name = disk_info['name']
+                    logger.debug(f"Getting SMART data for disk: {disk_name}")
+                    
+                    try:
+                        # Get SMART data for this specific disk
+                        smart_response = await store_instance.get_disk_smart(disk=disk_name, timeout=10.0)
+                        logger.debug(f"SMART response for {disk_name}: {smart_response}")
+
+                        # Process SMART response to extract smart_status.passed
+                        if (smart_response and 
+                            isinstance(smart_response, dict) and 
+                            'smart' in smart_response and 
+                            isinstance(smart_response['smart'], dict) and 
+                            'smart_status' in smart_response['smart'] and 
+                            isinstance(smart_response['smart']['smart_status'], dict) and 
+                            'passed' in smart_response['smart']['smart_status']):
+                            
+                            smart_passed = smart_response['smart']['smart_status']['passed']
+                            # Convert boolean to 0/1
+                            smart_passed_value = 1 if smart_passed else 0
+                            
+                            # Get device name from the SMART response
+                            device_name = None
+                            if ('smart' in smart_response and 
+                                'device' in smart_response['smart'] and 
+                                'name' in smart_response['smart']['device']):
+                                device_name = smart_response['smart']['device']['name']
+                            
+                            # If device name is not in SMART response, use the disk name from list_disks
+                            if not device_name:
+                                device_name = disk_name
+                            
+                            # Create labels with device_name
+                            labels = {'device_name': device_name}
+                            
+                            # Create metric name for SMART status
+                            metric_name = "fnos_disk_smart_status_passed"
+                            
+                            # Check if gauge already exists in our local dictionary
+                            if metric_name not in gauges:
+                                try:
+                                    gauges[metric_name] = Gauge(
+                                        metric_name, 
+                                        "fnOS disk SMART status passed (1 for passed, 0 for failed)", 
+                                        list(labels.keys())
+                                    )
+                                except ValueError:
+                                    # If the metric is already registered in prometheus registry, 
+                                    # retrieve it from there
+                                    from prometheus_client import REGISTRY
+                                    gauges[metric_name] = REGISTRY._names_to_collectors.get(metric_name)
+                            
+                            # Set the gauge value with labels
+                            gauges[metric_name].labels(**labels).set(smart_passed_value)
+                            
+                            logger.info(f"Set SMART status for {device_name}: {smart_passed_value}")
+                        else:
+                            logger.warning(f"No smart_status.passed found in SMART response for disk {disk_name}")
+                    except Exception as e:
+                        logger.error(f"Error getting SMART data for disk {disk_name}: {e}")
+                else:
+                    logger.warning(f"No name found for disk in disk list: {disk_info}")
+            
+            logger.info("SMART metrics collected successfully from fnOS system")
+            return True
+        else:
+            logger.info("No disk data found in list_disks response, but SMART collection completed successfully")
+            logger.debug(f"Response content: {disk_list_response}")
+            return True  # Return True even if no disks to process
+    except Exception as e:
+        logger.error(f"Error collecting SMART metrics: {e}")
+        return False

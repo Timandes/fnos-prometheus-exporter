@@ -54,7 +54,7 @@ from utils.common import camel_to_snake, flatten_dict
 
 # Import collector modules
 from collector.resource import collect_resource_metrics, set_resource_metrics, collect_disk_performance_metrics, set_disk_performance_metrics
-from collector.store.store import collect_store_metrics, collect_disk_metrics, set_disk_metrics, set_store_metrics
+from collector.store.store import collect_store_metrics, collect_disk_metrics, collect_smart_metrics, set_disk_metrics, set_store_metrics
 from collector.network.network import collect_network_metrics, set_network_metrics
 
 # Set up basic logging configuration
@@ -364,8 +364,19 @@ async def async_collect_metrics(host, user, password):
                 except Exception as e:
                     logger.error(f"Error collecting disk metrics: {e}")
                     # Continue with other metrics collection even if disk metrics fail
+
+                # Get SMART data
+                try:
+                    smart_success = await collect_smart_metrics(store_instance)
+                    if not smart_success:
+                        # If SMART metrics collection fails, we might still want to return True
+                        # if other metrics were collected successfully
+                        logger.warning("Failed to collect SMART metrics")
+                except Exception as e:
+                    logger.error(f"Error collecting SMART metrics: {e}")
+                    # Continue with other metrics collection even if SMART metrics fail
             else:
-                logger.warning("Store instance not available, skipping store and disk metrics collection")
+                logger.warning("Store instance not available, skipping store, disk, and SMART metrics collection")
 
             # Get network data
             if network_instance:

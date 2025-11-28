@@ -114,7 +114,7 @@ uvx fnos-exporter --user your-username --password your-password
 | 指标名称 | 类型 | 描述 |
 |-------------|------|-------------|
 | fnos_uptime | Gauge | fnOS 系统的正常运行时间信息（具体子指标取决于系统返回的内容） |
-| fnos_disk_* | Gauge/Info | 从Store.list_disks()和ResourceMonitor.disk()方法获取的磁盘相关信息 |
+| fnos_disk_* | Gauge/Info | 从Store.list_disks()、ResourceMonitor.disk()和Store.get_disk_smart()方法获取的磁盘相关信息 |
 | fnos_store_* | Gauge/Info | 从Store.general()方法获取的存储系统相关信息 |
 | fnos_network_* | Gauge/Info | 从Network.list()和ResourceMonitor.network()方法获取的网络接口相关信息 |
 
@@ -124,6 +124,7 @@ uvx fnos-exporter --user your-username --password your-password
 
 1. `Store.list_disks()` - 提供磁盘的基本信息（如型号、序列号、大小等）
 2. `ResourceMonitor.disk()` - 提供磁盘的性能信息（如温度、读写状态等）
+3. `Store.get_disk_smart()` - 提供磁盘的SMART状态信息
 
 所有`fnos_disk_*`指标都使用`device_name`标签来区分不同的磁盘设备（如"sda"、"nvme0n1"等），这与Linux系统中/dev目录的含义一致。
 
@@ -140,6 +141,7 @@ uvx fnos-exporter --user your-username --password your-password
 | fnos_disk_busy | Gauge | ResourceMonitor.disk() | 磁盘是否处于忙碌状态（0=否，1=是） |
 | fnos_disk_read | Gauge | ResourceMonitor.disk() | 磁盘读取操作计数 |
 | fnos_disk_write | Gauge | ResourceMonitor.disk() | 磁盘写入操作计数 |
+| fnos_disk_smart_status_passed | Gauge | Store.get_disk_smart() | 磁盘SMART状态是否通过检测（1=通过，0=未通过） |
 
 ### fnos_cpu_* 指标详情
 
